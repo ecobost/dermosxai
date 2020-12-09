@@ -1,0 +1,34 @@
+services:
+  notebook:
+    runtime: nvidia
+    image: ecobost/dermosxai
+    ports:
+      - "7777:8888"
+    volumes:
+      - /tmp:/tmp
+      - /tmp/.X11-unix:/tmp/.X11-unix # for X-forwarding
+      - .:/src/dermosxai
+    environment:
+      - DISPLAY=$DISPLAY
+    entrypoint:
+      - jupyter 
+      - lab
+      - --ip=0.0.0.0
+      - --allow-root
+      - --NotebookApp.token=''
+      - --no-browser
+    working_dir: /src/dermosxai
+    ipc: host # needed for multiprocessing (dataloader) in pytorch 
+
+  bash:
+    runtime: nvidia
+    image: ecobost/dermosxai
+    volumes:
+      - /tmp:/tmp
+      - /tmp/.X11-unix:/tmp/.X11-unix # for X-forwarding
+      - .:/src/dermosxai
+    environment:
+      - DISPLAY=$DISPLAY
+    entrypoint: /bin/bash
+    working_dir: /src/dermosxai
+    ipc: host # needed for multiprocessing (dataloader) in pytorch
