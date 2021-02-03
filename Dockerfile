@@ -18,8 +18,7 @@ RUN pip install -e /src/dermosxai
 
 # Install extra libraries (non-essential but useful)
 RUN apt install -y python3-tk nano
-RUN pip install matplotlib jupyterlab #ipympl
-# https://github.com/jupyterlab/jupyterlab/issues/9226#issuecomment-716261418 : according to this comment in jupyterlab v3.0, interactive matplotlib will only require installing ipympl
+RUN pip install matplotlib jupyterlab ipympl
 
 # Clean apt lists
 RUN rm -rf /var/lib/apt/lists/*
