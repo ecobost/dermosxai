@@ -57,7 +57,7 @@ def get_IAD():
     labels = np.array([IAD_diagnosis2id[d] for d in diagnosis])
 
     # Drop labels with -1
-    images = images[labels != -1]
+    images = [im for im, l in zip(images, labels) if l != -1]
     labels = labels[labels != -1]
 
     return images, labels
