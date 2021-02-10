@@ -1,0 +1,4 @@
+*.pyc
+notebooks/
+data/
+#.gitignore
