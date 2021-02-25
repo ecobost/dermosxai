@@ -16,7 +16,7 @@ HAM_diagnosis2id = {
     'mel': 1,  # Melanoma
     'bkl': 2,  # Benign keratosis
     'bcc': 3,  # Basal cell carcinoma
-    'akiem': -1,  # Actinic keratosis
+    'akiec': -1,  # Actinic keratosis
     'df': -1,  # Dermatofibroma
     'vasc': -1,  # Vascular skin lesions
 }
@@ -35,24 +35,24 @@ id2diagnosis = {
 
 
 def get_IAD():
-    """ Return images and labels for each patient in the IAD dataset. 
+    """ Return images and labels for each lesion in the IAD dataset. 
     
     Returns:
-        images (list): A list (of size num_patients) with the images as 4-d arrays 
-            (num_images_per_patient x height x widht x 3). This needs to be a list because
-            number of images differs per patient.
+        images (list): A list (of size num_lesions) with the images as uint8 4-d arrays 
+            (num_images_per_lesion x height x widht x 3). This needs to be a list because
+            number of images differs per lesion.
         labels (np.array): Array of labels for each patient. 0: Nevus, 1: Melanoma, 
             2: Keratosis, 3: Basal cell carcinoma.
     """
     # Load images
     images = []
-    with h5py.File(path.join(IAD_dir, 'IAD_images.h5'), 'r') as f:
+    with h5py.File(path.join(IAD_dir, 'images.h5'), 'r') as f:
         for i in range(len(f)):
             im = f[str(i)][()]  # load images
             images.append(im)
 
     # Load labels
-    attrs = pd.read_csv(path.join(IAD_dir, 'IAD_metadata.csv'))
+    attrs = pd.read_csv(path.join(IAD_dir, 'lesion_info.csv'))
     diagnosis = attrs['diagnosis']
     labels = np.array([IAD_diagnosis2id[d] for d in diagnosis])
 
@@ -64,16 +64,32 @@ def get_IAD():
 
 
 def get_HAM10000():
-    """ Return images and labels for each patient in the HAM10000 dataset. 
+    """ Return images and labels for each lesion in the HAM10000 dataset. 
     
     Returns:
-        images (np.array): A np.uint8 array (num_patients x height x widht x 3) with the 
-            images.
+        images (list): A list (of size num_lesions) with the images as uint8 4-d arrays 
+            (num_images_per_lesion x height x widht x 3). This needs to be a list because
+            number of images differs per lesion.
         labels (np.array): Array of labels for each patient. 0: Nevus, 1: Melanoma, 
             2: Keratosis, 3: Basal cell carcinoma.
     """
-    #TODO:
-    pass
+    # Load images
+    images = []
+    with h5py.File(path.join(HAM_dir, 'images.h5'), 'r') as f:
+        for i in range(len(f)):
+            im = f[str(i)][()]  # load images
+            images.append(im)
+
+    # Load labels
+    attrs = pd.read_csv(path.join(HAM_dir, 'lesion_info.csv'))
+    diagnosis = attrs['dx']
+    labels = np.array([HAM_diagnosis2id[d] for d in diagnosis])
+
+    # Drop labels with -1
+    images = [im for im, l in zip(images, labels) if l != -1]
+    labels = labels[labels != -1]
+
+    return images, labels
 
 
 def get_IAD_attributes(attribute_names=[
@@ -105,10 +121,10 @@ def get_IAD_attributes(attribute_names=[
         presence or absence of each of k-1 variables and a reference level of all zeros 
         represents the remaining attribute.
         
-        Some attributes like pigment_network have values [absent, typical, atypical] and 
+        Some attributes like pigment_network have values [absent, typical, atypical] that 
         could have been coded as ordinal rather than nominal categorical variables. I 
         chose not to because it is not fully clear that atypical > typical (and if so, by 
-        ho much) so I could encode them as continuous variables or that atypical is a 
+        how much) so I could encode them as continuous variables or that atypical is a 
         superset of typical so they could be encoded as 00 (absent), 10 (typical) and 
         11 (atypical).
         
@@ -124,8 +140,12 @@ def get_IAD_attributes(attribute_names=[
         raise ValueError('Need to provide a ref_value for all categorical variables.')
 
     # Load attributes
-    attrs = pd.read_csv(path.join(IAD_dir, 'IAD_metadata.csv'))
+    attrs = pd.read_csv(path.join(IAD_dir, 'lesion_info.csv'))
     attributes = attrs[attribute_names]
+
+    # Drop attributes with label = -1 (ignored diagnoses)
+    labels = np.array([IAD_diagnosis2id[d] for d in attrs['diagnosis']])
+    attributes = attributes[labels != -1]
 
     # Code attributes as dummy variables
     nominal_attributes = [a for a, d in zip(attribute_names, make_dummy) if d]
@@ -137,9 +157,5 @@ def get_IAD_attributes(attribute_names=[
     attribute_names = attributes.columns.to_list()
     is_binary = np.array([('#' in n) for n in attribute_names])
     attributes = attributes.to_numpy()
-
-    # Drop aatributes with label = -1 (ignored diagnoses)
-    labels = np.array([IAD_diagnosis2id[d] for d in attrs['diagnosis']])
-    attributes = attributes[labels != -1]
 
     return attributes, attribute_names, is_binary
