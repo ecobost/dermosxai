@@ -1,6 +1,6 @@
 #TODO: check what the pytorch image has installed and maybe use that one
 
-FROM pytorch/pytorch:1.7.0-cuda11.0-cudnn8-runtime
+FROM pytorch/pytorch:1.8.0-cuda11.1-cudnn8-runtime
 ARG DEBIAN_FRONTEND=noninteractive
 LABEL MANTAINER="Erick Cobos <ecobos@tuebingen.mpg.de>"
 WORKDIR /src
