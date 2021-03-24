@@ -93,3 +93,13 @@ def create_grid(ims, num_rows=3, num_cols=4, row_gap=5, col_gap=5, bg_value=1):
              col * (width + col_gap):col * (width + col_gap) + width] = im
 
     return grid
+
+
+def log(*messages):
+    """ Prints a message (with a timestamp next to it).
+    
+    Arguments:
+        message (string): Arguments to be print()'d.
+    """
+    formatted_time = '[{}]'.format(time.ctime())
+    print(formatted_time, *messages, flush=True)
