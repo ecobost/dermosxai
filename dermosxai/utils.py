@@ -1,5 +1,6 @@
 """ Some basic utility functions. """
 import numpy as np
+import time
 
 
 
@@ -95,7 +96,7 @@ def create_grid(ims, num_rows=3, num_cols=4, row_gap=5, col_gap=5, bg_value=1):
     return grid
 
 
-def log(*messages):
+def tprint(*messages):
     """ Prints a message (with a timestamp next to it).
     
     Arguments:
