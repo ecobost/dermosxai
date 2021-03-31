@@ -49,19 +49,17 @@ def train_one(param_id):
     return train(**selected_params)
 
 
-def train(decoder='resize', seed=19, batch_size=64, learning_rate=0.01, momentum=0.9,
-          weight_decay=0.01, num_epochs=200, decay_epochs=5, lr_decay=0.1,
-          stopping_epochs=25, loss_function='beta-vae', beta_weight=1,
-          augmentation='flips'):
-    """ Trains a VAE with SGD (+ Nesterov momentum) and early stopping.
+def train(decoder='resize', seed=19, batch_size=64, learning_rate=0.001, weight_decay=0.01,
+          num_epochs=200, decay_epochs=5, lr_decay=0.1, stopping_epochs=25,
+          loss_function='beta-vae', beta_weight=1, augmentation='flips'):
+    """ Trains a VAE with ADAM and early stopping.
     
     Arguments:
         decoder(string): Type of decoder architecture for the VAE. One of "resize", 
             "transposed", "shuffled" and "broadcast". See models.py for details.
         seed(int): Random seed for torch and numpy
         batch_size (int): Batch size.
-        learning_rate (float): Initial learning rate for the optimizer
-        momemtum (float): Momentum factor for SGD updates.
+        learning_rate (float): Initial learning rate for the optimizer.
         weight_decay (float): Weight for the l2 regularization.
         num_epochs (int): Maximum number of epochs to run.
         decay_epochs (int): Number of epochs to wait before decreasing learning rate if 
@@ -83,13 +81,12 @@ def train(decoder='resize', seed=19, batch_size=64, learning_rate=0.01, momentum
     # Log wandb hyperparams
     hyperparams = {
         'decoder': decoder, 'seed': seed, 'batch_size': batch_size,
-        'learning_rate': learning_rate, 'momentum': momentum,
-        'weight_decay': weight_decay, 'num_epochs': num_epochs,
-        'decay_epochs': decay_epochs, 'lr_decay': lr_decay,
+        'learning_rate': learning_rate, 'weight_decay': weight_decay,
+        'num_epochs': num_epochs, 'decay_epochs': decay_epochs, 'lr_decay': lr_decay,
         'stopping_epochs': stopping_epochs, 'loss_function': loss_function,
         'beta_weight': beta_weight, 'augmentation': augmentation}
-    wandb.init(project='dermosxai_vae', group='ham10K-only', config=hyperparams, tags=['no-zsampling']) #mode='disabled')
-
+    wandb.init(project='dermosxai_vae', group='ham10K-only', config=hyperparams,
+               tags=['no-zsampling'])  #mode='disabled')
 
     # Set random seed
     torch.manual_seed(seed)
@@ -141,8 +138,8 @@ def train(decoder='resize', seed=19, batch_size=64, learning_rate=0.01, momentum
     model.cuda()
 
     # Declare optimizer
-    optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=momentum,
-                          nesterov=True, weight_decay=weight_decay)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate,
+                           weight_decay=weight_decay)
     scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, factor=lr_decay,
                                                patience=decay_epochs, verbose=True)
 
@@ -179,7 +176,7 @@ def train(decoder='resize', seed=19, batch_size=64, learning_rate=0.01, momentum
             q_params, _, recons = model(images)
 
             # Compute loss
-            nll = F.mse_loss(images, recons)
+            nll = ((recons - images)**2).sum(dim=(1, 2, 3)).mean()
             if loss_function == 'beta-vae':
                 kl = models.gaussian_KL(*q_params).mean()
                 loss = nll + beta_weight * kl
@@ -216,7 +213,7 @@ def train(decoder='resize', seed=19, batch_size=64, learning_rate=0.01, momentum
                 for images, _ in val_dloader:
                     images = images.cuda()
                     q_params, _, recons = model(images)
-                    val_nll += F.mse_loss(images, recons, reduction='none').mean((1, 2, 3)).sum()
+                    val_nll += ((recons - images)**2).sum()
                     val_kl += models.gaussian_KL(*q_params).sum()
                 val_nll = val_nll.sum() / len(val_dset)
                 val_kl = val_kl.sum() / len(val_dset)
