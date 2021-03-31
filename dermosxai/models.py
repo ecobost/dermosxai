@@ -63,7 +63,7 @@ class ConvEncoder(nn.Module):
             nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1, padding_mode='reflect',
                       bias=False),
             nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),            
+            nn.ReLU(inplace=True),
             nn.Conv2d(128, out_channels, kernel_size=4),  # output is 1 x 1
             ]
         self.layers = nn.Sequential(*layers)
@@ -331,15 +331,14 @@ class BroadcastDecoder(nn.Module):
         init_bn(m for m in self.layers if isinstance(m, nn.BatchNorm2d))
 
 
-
 class VAE(nn.Module):
-    """ A standard VAE.
+    """ VAE with a multivariate normal q(z|x) with diagonal covariance matrix.
     
     Arguments:
         img_channels (int): Number of channels in the input.
-        hidden_dims (int): Number of dimensions of the intermediate representation. The 
-            actual intermediate representation will have twice this number, the second
-            half are the log(std) components.
+        hidden_dims (int): Number of variables in the intermediate representation. The 
+            encoder predicts twice as many features, the second half are the log(std) 
+            components.
         decoder (str): Decoder to use. One of "transposed", "resize", "shuffle" or 
             "broadcast".
     """
@@ -348,7 +347,7 @@ class VAE(nn.Module):
         super().__init__()
 
         # Define encoder
-        self.encoder = ConvEncoder(3, hidden_dims*2)
+        self.encoder = ConvEncoder(img_channels, hidden_dims * 2)
 
         # Define decoder
         if decoder == 'transpose':
@@ -364,31 +363,118 @@ class VAE(nn.Module):
 
         # Save params
         self.hidden_dims=hidden_dims
-        self.resize_images = (128, 128) # TODO: receive this as input?
+        self.sample_z = True # whether to sample z from q(z|x) or return the mean
 
-    def sample(self, z_params):
-        """ Considers the first half od the dims as the mean ad the rest as the std."""
-        return z_params[:, :self.hidden_dims]
-
-        #TODO: Add so that when the model is put in eval the sampling only returns the mean, or maybe add a diff variable for that
-        # if self.eval:
-        #     pass
-
-    def forward(self, x):
-        original_dims = x.shape[2:]
+    def encode(self, x):
+        """Takes original image to predicted mu and sigma for the proposal distribution. 
+        
+        Arguments:
+            x (torch.FloatTensor): Batch of images (N x C X H X W).
+        
+        Returns:
+            mu (torch.FloatTensor): A (N x hidden_dims) vector with the predicted means.
+            sigma (torch.FloatTensor): A (N x hidden_dims) vector with the predicted stds.
+        """
+        # Resizing image to 128 x 128
+        self.original_dims = x.shape[2:] # used for resizing
         resized_x = F.interpolate(x, (128, 128), mode='bilinear', align_corners=False)
 
+        # Encode image into u, sigma for gaussian q distribution
+        q_params = self.encoder(resized_x)
+        mu, sigma = self._decode_gaussian_params(q_params)
 
-        z_params = self.encoder(resized_x)
-        z = self.sample(z_params)
-        x_tilde = self.decoder(z)
+        return mu, sigma
 
-        final_recon = F.interpolate(x_tilde, original_dims, mode='bilinear',
-                                    align_corners=False)
+    def _decode_gaussian_params(self, q_params):
+        """ Takes the intermediate representation and transforms it into mean and sigma 
+        for the q(z|x) distribution.
+        
+        First half of the vector is the mean and the second part the logsigma.
+        """
+        mu = q_params[:, :self.hidden_dims]
+        sigma = torch.exp(q_params[:, self.hidden_dims:])
+        return mu, sigma
 
+    def decode(self, z):
+        """ Takes a hidden vector to image. """
+        recons = self.decoder(z)
+        resized_recons = F.interpolate(recons, self.original_dims, mode='bilinear',
+                                       align_corners=False)
+        return resized_recons
 
-        return final_recon
+    def train(self, mode=True):
+        super().train(mode)
+        self.sample_z = mode  # disable sampling of z during evaluation (eval() calls train(False))
+
+    def forward(self, x):
+        """ Forward and return all intermediate values.
+        
+        Returns:
+            q_params (tuple): Predicted params (mu, sigma) for the gaussian q(z|x) 
+                distribution.
+            z (torch.Tensor): Sampled value from q(z|x) (with the predicted params).
+            recons (torch.Tensor): Reconstructed image from the sample z.
+        """
+        mu, sigma = self.encode(x)
+        z = gaussian_sample(mu, sigma) if self.sample_z else mu
+        recons = self.decode(z)
+        return (mu, sigma), z, recons
 
     def init_parameters(self):
         self.encoder.init_parameters()
         self.decoder.init_parameters()
+
+
+# When doing the VAE where the intermediate features are shared, I can reuse the
+# encoder/decoder and overall interface of this VAE (with a encode(), decode() and
+# decode_q_params() function).
+
+
+
+
+
+#TODO: Maybe move this functions to a diff dist_utils.py (where I can also put other sampling stuff)
+def gaussian_sample(mu, sigma):
+    """ Sample a gaussian variable using the reparametrization trick.
+    
+    Arguments:
+        mu (torch.Tensor): Mean.
+        sigma (torch.Tensor): Standard deviation. Same size as mu.
+    
+    Returns:
+        z (torch.Tensor): Samples. Same size as mean.
+    """
+    noise = torch.randn_like(mu)
+    return mu + noise * sigma
+
+
+def gaussian_KL(mu, sigma):
+    """ Analytically compute KL divergence between the multivariate gaussian defined by 
+    the input params (assuming diagonal covariance matrix) and N(0, I). 
+    
+    Arguments:
+        mu (torch.Tensor): Mean. Expected size (N x num_variables)
+        sigma (torch.Tensor): Standard deviation. Same size as mean.
+    
+    Returns:
+        kl (torch.Tensor): KL divergence for each example in the batch.
+    """
+    kl = ((sigma**2 - 1).sum(-1) + (mu**2).sum(-1)) / 2 - torch.log(sigma).sum(-1)
+    return kl
+
+
+#TODO: Actually implement this
+def approx_kl(p, q, z):
+    """ Compute a MonteCarlo approximation of the KL(q|p): 1/n * (log(q(z)) - log(p(z))) 
+    
+    Arguments:
+        p (torch.distributions): The distribution of the prior p(z).
+        q (torch.distributions): The distribution of q(z|x) distribution.
+        z (torch.Tensor): Samples from q (N x num_variables). 
+    
+    Returns:
+        kl (torch.Tensor): KL divergence estimate.
+    """
+    raise NotImplementedError('Test and make sure this is alright!')
+    kl = (p.log_prob(z) - q.log_prob(z)).sum(axis=-1).mean(0)
+    return kl
