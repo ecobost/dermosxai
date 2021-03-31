@@ -16,26 +16,24 @@ from dermosxai import datasets, models, utils
 
 def get_hyperparams():
     """ Returns a list of hyperparams to run."""
-    # Test lr and alpha
-    return [  #{'batch_size': 64, 'beta_weight': 0}, 
-        {'batch_size': 128, 'beta_weight': 0},
-        {'augmentation': 'full', 'beta_weight': 0},
-        {'learning_rate': 0.001, 'beta_weight': 0},
-        {'weight_decay': 0.001, 'beta_weight': 0}, ]
+    import itertools
 
+    # sampling but no KL 
+    yield {'beta_weight': 0} 
+    
+    # test some hyperparams
+    for lr, wd, a, beta in itertools.product([1e-4, 1e-3, 1e-2], [0, 1e-4, 1e-2], ['flips', 'full'], [0.36, 1, 3.6]) :
+       yield {'learning_rate': lr, 'weight_decay': wd, 'augmentation': a, 'beta_weight': beta}
 
-    # Test bigger aarchitectures
-    # #Test:
-    #     hyperparams (lr and alpha)
-    #     transform (full)
-    #     batch_size (128, 64, 32)
-    #     decoder
-    #     beta_weight
-    #     loss function
+    #TODO: test bigger architecture, decoder, batchsize 
 
 def train_all():
     for params in get_hyperparams():
-        train(**params)
+        try:
+            train(**params)
+        except ValueError:
+            pass 
+            
 
 def train_one(param_id):
     """ Utility function to run one hyperparam. Used to coordinate diff runs in the 
@@ -44,7 +42,7 @@ def train_one(param_id):
     Arguments:
         param_id: Which hyperparam set to train
     """
-    all_params = get_hyperparams()
+    all_params = list(get_hyperparams())
     selected_params = all_params[param_id]
     return train(**selected_params)
 
@@ -85,8 +83,7 @@ def train(decoder='resize', seed=19, batch_size=64, learning_rate=0.001, weight_
         'num_epochs': num_epochs, 'decay_epochs': decay_epochs, 'lr_decay': lr_decay,
         'stopping_epochs': stopping_epochs, 'loss_function': loss_function,
         'beta_weight': beta_weight, 'augmentation': augmentation}
-    wandb.init(project='dermosxai_vae', group='ham10K-only', config=hyperparams,
-               tags=['no-zsampling'])  #mode='disabled')
+    wandb.init(project='dermosxai_vae', group='ham10K-only', config=hyperparams)
 
     # Set random seed
     torch.manual_seed(seed)
@@ -164,14 +161,6 @@ def train(decoder='resize', seed=19, batch_size=64, learning_rate=0.001, weight_
             # Move variables to GPU
             images = images.cuda()
 
-
-
-
-            #TODO: DELETE
-            model.sample_z = False
-
-
-
             # Forward
             q_params, _, recons = model(images)
 
@@ -184,8 +173,8 @@ def train(decoder='resize', seed=19, batch_size=64, learning_rate=0.001, weight_
                           'kl': kl.item(), 'loss': loss.item()})
 
                 if batch_i % 10 == 0:
-                    utils.tprint(f'Training loss {loss.item():.5f}',
-                                 f'(MSE: {nll.item():.5f}, KL: {kl.item():.5f})')
+                    utils.tprint(f'Training loss {loss.item():.0f}',
+                                 f'(MSE: {nll.item():.0f}, KL: {kl.item():.0f})')
             elif loss_function == 'tcvae':
                 #TODO: Maybe refactor to a _compute_loss() function
                 raise NotImplementedError("this ain't it chief")
@@ -221,8 +210,8 @@ def train(decoder='resize', seed=19, batch_size=64, learning_rate=0.001, weight_
 
                 wandb.log({'epoch': epoch, 'val_nll': val_nll.item(),
                           'val_kl': val_kl.item(), 'val_loss': val_loss.item()})
-                utils.tprint(f'Validation loss {val_loss.item():.5f}',
-                             f'(MSE: {val_nll.item():.5f}, KL: {kl.item():.5f})')
+                utils.tprint(f'Validation loss {val_loss.item():.0f}',
+                             f'(MSE: {val_nll.item():.0f}, KL: {kl.item():.0f})')
             elif loss_function == 'tcvae':
                 raise NotImplementedError("not yet")
             else:
@@ -246,7 +235,6 @@ def train(decoder='resize', seed=19, batch_size=64, learning_rate=0.001, weight_
             best_epoch = epoch
             best_nll = val_nll
             best_model = copy.deepcopy(model).cpu()
-            wandb.log({'epoch': epoch, 'model_saved': True})
 
         # Stop training if validation has not improved in x number of epochs
         if epoch - best_epoch >= stopping_epochs:
