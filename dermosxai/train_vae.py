@@ -18,22 +18,19 @@ def get_hyperparams():
     """ Returns a list of hyperparams to run."""
     import itertools
 
-    # sampling but no KL 
-    yield {'beta_weight': 0} 
-    
-    # test some hyperparams
-    for lr, wd, a, beta in itertools.product([1e-4, 1e-3, 1e-2], [0, 1e-4, 1e-2], ['flips', 'full'], [0.36, 1, 3.6]) :
-       yield {'learning_rate': lr, 'weight_decay': wd, 'augmentation': a, 'beta_weight': beta}
+    # test some initial hyperparams
+    # for lr, wd, a, beta in itertools.product([1e-4, 1e-3, 1e-2], [0, 1e-4, 1e-2], ['flips', 'full'], [0.36, 1, 3.6]) :
+    #     yield {'learning_rate': lr, 'weight_decay': wd, 'augmentation': a, 'beta_weight': beta}
 
-    #TODO: test bigger architecture, decoder, batchsize 
+    #TODO: decoder, batchsize
 
 def train_all():
     for params in get_hyperparams():
         try:
             train(**params)
         except ValueError:
-            pass 
-            
+            pass
+
 
 def train_one(param_id):
     """ Utility function to run one hyperparam. Used to coordinate diff runs in the 
@@ -47,7 +44,7 @@ def train_one(param_id):
     return train(**selected_params)
 
 
-def train(decoder='resize', seed=19, batch_size=64, learning_rate=0.001, weight_decay=0.01,
+def train(decoder='resize', seed=19, batch_size=64, learning_rate=0.001, weight_decay=0,
           num_epochs=200, decay_epochs=5, lr_decay=0.1, stopping_epochs=25,
           loss_function='beta-vae', beta_weight=1, augmentation='flips'):
     """ Trains a VAE with ADAM and early stopping.
@@ -83,7 +80,8 @@ def train(decoder='resize', seed=19, batch_size=64, learning_rate=0.001, weight_
         'num_epochs': num_epochs, 'decay_epochs': decay_epochs, 'lr_decay': lr_decay,
         'stopping_epochs': stopping_epochs, 'loss_function': loss_function,
         'beta_weight': beta_weight, 'augmentation': augmentation}
-    wandb.init(project='dermosxai_vae', group='ham10K-only', config=hyperparams)
+    wandb.init(project='dermosxai_vae', group='ham10K-only', config=hyperparams, 
+               dir='/src/dermosxai/data')
 
     # Set random seed
     torch.manual_seed(seed)
@@ -144,6 +142,7 @@ def train(decoder='resize', seed=19, batch_size=64, learning_rate=0.001, weight_
     best_model = copy.deepcopy(model).cpu()
     best_epoch = 0
     best_nll = float('inf')
+    best_kl = float('inf') # kl at the best epoch as chosen with MSE
 
     # Train
     start_time = time.time()  # in seconds
@@ -186,6 +185,7 @@ def train(decoder='resize', seed=19, batch_size=64, learning_rate=0.001, weight_
                 wandb.run.summary['diverged'] =  True
                 wandb.run.summary['best_epoch'] = best_epoch
                 wandb.run.summary['best_val_nll'] = best_nll
+                wandb.run.summary['best_val_kl'] = best_kl
                 wandb.run.finish()
                 raise ValueError('Training loss diverged')
 
@@ -223,6 +223,7 @@ def train(decoder='resize', seed=19, batch_size=64, learning_rate=0.001, weight_
             wandb.run.summary['diverged'] =  True
             wandb.run.summary['best_epoch'] = best_epoch
             wandb.run.summary['best_val_nll'] = best_nll
+            wandb.run.summary['best_val_kl'] = best_kl
             wandb.run.finish()
             raise ValueError('Validation loss diverged')
 
@@ -234,6 +235,7 @@ def train(decoder='resize', seed=19, batch_size=64, learning_rate=0.001, weight_
             utils.tprint('Saving best model')
             best_epoch = epoch
             best_nll = val_nll
+            best_kl = val_kl
             best_model = copy.deepcopy(model).cpu()
 
         # Stop training if validation has not improved in x number of epochs
@@ -250,6 +252,7 @@ def train(decoder='resize', seed=19, batch_size=64, learning_rate=0.001, weight_
     wandb.run.summary['diverged'] =  False
     wandb.run.summary['best_epoch'] = best_epoch
     wandb.run.summary['best_val_nll'] = best_nll
+    wandb.run.summary['best_val_kl'] = best_kl
 
     # Save model
     wandb.save('model.pt')
