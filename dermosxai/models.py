@@ -28,13 +28,13 @@ def init_bn(modules):
 
 class ConvEncoder(nn.Module):
     """ Encodes an 2d input into a single dimensional feature vector using convs.
-    
-    Downsampling is done by 4 x 4 convs with stride=2. It is recommended to use kernel 
+
+    Downsampling is done by 4 x 4 convs with stride=2. It is recommended to use kernel
     sizes that are divisible by the stride to avoid checkerboard artifacts.
-    
+
     Input: N x in_channels x 128 x 128
     Output: N x out_channels
-    
+
     Arguments:
         in_channels (int): Number of channels in the input image.
         out_channels (int): Size of the outputted feature vector.
@@ -74,6 +74,226 @@ class ConvEncoder(nn.Module):
     def init_parameters(self):
         init_conv(m for m in self.layers if isinstance(m, nn.Conv2d))
         init_bn(m for m in self.layers if isinstance(m, nn.BatchNorm2d))
+
+
+# class ConvEncoder(nn.Module):
+#     """ Encodes an 2d input into a single dimensional feature vector using convs.
+
+#     Downsampling is done by 4 x 4 convs with stride=2. It is recommended to use kernel
+#     sizes that are divisible by the stride to avoid checkerboard artifacts.
+
+#     Input: N x in_channels x 128 x 128
+#     Output: N x out_channels
+
+#     Arguments:
+#         in_channels (int): Number of channels in the input image.
+#         out_channels (int): Size of the outputted feature vector.
+#     """
+#     def __init__(self, in_channels=3, out_channels=256):
+#         super().__init__()
+
+#         # Create layers
+#         layers = [
+#             nn.Conv2d(in_channels, 32, kernel_size=4, stride=2, padding=1,
+#                       padding_mode='reflect', bias=False),
+#             nn.BatchNorm2d(32),
+#             nn.ReLU(inplace=True),
+#             nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=1,
+#                       padding_mode='reflect', bias=False),
+#             nn.BatchNorm2d(32),
+#             nn.ReLU(inplace=True),
+
+#             nn.Conv2d(32, 32, kernel_size=4, stride=2, padding=1, padding_mode='reflect',
+#                       bias=False),
+#             nn.BatchNorm2d(32),
+#             nn.ReLU(inplace=True),
+#             nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=1, padding_mode='reflect',
+#                       bias=False),
+#             nn.BatchNorm2d(32),
+#             nn.ReLU(inplace=True),
+
+#             nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=1, padding_mode='reflect',
+#                       bias=False),
+#             nn.BatchNorm2d(64),
+#             nn.ReLU(inplace=True),
+#             nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1, padding_mode='reflect',
+#                       bias=False),
+#             nn.BatchNorm2d(64),
+#             nn.ReLU(inplace=True),
+
+#             nn.Conv2d(64, 64, kernel_size=4, stride=2, padding=1, padding_mode='reflect',
+#                       bias=False),
+#             nn.BatchNorm2d(64),
+#             nn.ReLU(inplace=True),
+#             nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1, padding_mode='reflect',
+#                       bias=False),
+#             nn.BatchNorm2d(64),
+#             nn.ReLU(inplace=True),
+
+
+#             nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1, padding_mode='reflect',
+#                       bias=False),
+#             nn.BatchNorm2d(128),
+#             nn.ReLU(inplace=True),
+#             nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1, padding_mode='reflect',
+#                       bias=False),
+#             nn.BatchNorm2d(128),
+#             nn.ReLU(inplace=True),
+
+
+#             nn.Conv2d(128, out_channels, kernel_size=4),  # output is 1 x 1
+#         ]
+#         self.layers = nn.Sequential(*layers)
+
+#     def forward(self, x):
+#         return self.layers(x).squeeze(-1).squeeze(-1)
+
+#     def init_parameters(self):
+#         init_conv(m for m in self.layers if isinstance(m, nn.Conv2d))
+#         init_bn(m for m in self.layers if isinstance(m, nn.BatchNorm2d))
+
+
+
+
+# class ResidualBlock(nn.Module):
+#     """ A single residual block.
+#     Two layers (or three for bottleneck blocks) and a shortcut connection from the input
+#     to the output. Preserves spatial dimensions and number of feature maps.
+#     Arguments:
+#         in_channels (int): Number of feature maps in the input (and output)
+#         use_bottleneck (bool): Whether to use bottleneck blocks.
+#         bottleneck_factor (float): Factor to reduce feature maps in the bottleneck layer.
+#     """
+#     def __init__(self, in_channels, out_channels):
+#         super().__init__()
+#         # self.out_channels = in_channels
+#         # if use_bottleneck:
+#         #     btn_channels = int(in_channels * bottleneck_factor)
+#         #     self.layers = nn.Sequential(
+#         #         nn.Conv2d(in_channels, btn_channels, 1, bias=False),
+#         #         nn.BatchNorm2d(btn_channels), nn.ReLU(inplace=True),
+#         #         nn.Conv2d(btn_channels, btn_channels, 3, padding=1, bias=False),
+#         #         nn.BatchNorm2d(in_channels))
+#         # else:
+#         if out_channels == 128: # TODO: AD_HOC
+#             conv = nn.Conv2d(out_channels, out_channels, 1, bias=False)
+#         else:
+#             conv = nn.Conv2d(out_channels, out_channels, 3, padding=1, stride=1,
+#                       padding_mode='reflect', bias=False)
+
+#         self.layers = nn.Sequential(
+#             nn.Conv2d(in_channels, out_channels, 4, padding=1, stride=2,
+#                       padding_mode='reflect', bias=False), nn.BatchNorm2d(out_channels),
+#             nn.ReLU(inplace=True),
+#             conv,
+#             nn.BatchNorm2d(out_channels))
+
+#         if in_channels == out_channels:
+#             self.down = nn.AvgPool2d(2)
+#         else:
+#             self.down = nn.Sequential(
+#                 nn.Conv2d(in_channels, out_channels, 1),
+#                 nn.AvgPool2d(2)
+#             )
+
+#     def forward(self, input_):
+#         self.output = F.relu(self.layers(input_) + self.down(input_))
+#         return self.output
+
+#     def init_parameters(self):
+#         init_conv(module for module in self.layers if isinstance(module, nn.Conv2d))
+#         init_bn(module for module in self.layers if isinstance(module, nn.BatchNorm2d))
+
+# #RESIDUAL
+# class ConvEncoder(nn.Module):
+#     """ Encodes an 2d input into a single dimensional feature vector using convs.
+
+#     Downsampling is done by 4 x 4 convs with stride=2. It is recommended to use kernel
+#     sizes that are divisible by the stride to avoid checkerboard artifacts.
+
+#     Input: N x in_channels x 128 x 128
+#     Output: N x out_channels
+
+#     Arguments:
+#         in_channels (int): Number of channels in the input image.
+#         out_channels (int): Size of the outputted feature vector.
+#     """
+#     def __init__(self, in_channels=3, out_channels=256):
+#         super().__init__()
+
+#         # Create layers
+#         layers = [
+#             ResidualBlock(in_channels, 32),
+#             ResidualBlock(32, 32),
+#             ResidualBlock(32, 64),
+#             ResidualBlock(64, 64),
+#             ResidualBlock(64, 128),
+#             nn.Conv2d(128, out_channels, kernel_size=4),  # output is 1 x 1
+#         ]
+#         self.layers = nn.Sequential(*layers)
+
+#     def forward(self, x):
+#         return self.layers(x).squeeze(-1).squeeze(-1)
+
+#     def init_parameters(self):
+#         init_conv(m for m in self.layers if isinstance(m, nn.Conv2d))
+#         init_bn(m for m in self.layers if isinstance(m, nn.BatchNorm2d))
+#         for m in self.layers[:-1]:
+#             m.init_parameters()
+
+
+# #WIDER
+# class ConvEncoder(nn.Module):
+#     """ Encodes an 2d input into a single dimensional feature vector using convs.
+
+#     Downsampling is done by 4 x 4 convs with stride=2. It is recommended to use kernel
+#     sizes that are divisible by the stride to avoid checkerboard artifacts.
+
+#     Input: N x in_channels x 128 x 128
+#     Output: N x out_channels
+
+#     Arguments:
+#         in_channels (int): Number of channels in the input image.
+#         out_channels (int): Size of the outputted feature vector.
+#     """
+#     def __init__(self, in_channels=3, out_channels=256):
+#         super().__init__()
+
+#         # Create layers
+#         layers = [
+#             nn.Conv2d(in_channels, 64, kernel_size=4, stride=2, padding=1,
+#                       padding_mode='reflect', bias=False),
+#             nn.BatchNorm2d(64),
+#             nn.ReLU(inplace=True),
+#             nn.Conv2d(64, 64, kernel_size=4, stride=2, padding=1, padding_mode='reflect',
+#                       bias=False),
+#             nn.BatchNorm2d(64),
+#             nn.ReLU(inplace=True),
+#             nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1, padding_mode='reflect',
+#                       bias=False),
+#             nn.BatchNorm2d(128),
+#             nn.ReLU(inplace=True),
+#             nn.Conv2d(128, 128, kernel_size=4, stride=2, padding=1, padding_mode='reflect',
+#                       bias=False),
+#             nn.BatchNorm2d(128),
+#             nn.ReLU(inplace=True),
+#             nn.Conv2d(128, 256, kernel_size=4, stride=2, padding=1, padding_mode='reflect',
+#                       bias=False),
+#             nn.BatchNorm2d(256),
+#             nn.ReLU(inplace=True),
+#             nn.Conv2d(256, out_channels, kernel_size=4),  # output is 1 x 1
+#             ]
+#         self.layers = nn.Sequential(*layers)
+
+#     def forward(self, x):
+#         return self.layers(x).squeeze(-1).squeeze(-1)
+
+#     def init_parameters(self):
+#         init_conv(m for m in self.layers if isinstance(m, nn.Conv2d))
+#         init_bn(m for m in self.layers if isinstance(m, nn.BatchNorm2d))
+
+
+
 
 
 class UnPad(nn.Module):
@@ -138,24 +358,23 @@ class TransposeDecoder(nn.Module):
         init_conv([m for m in self.layers if isinstance(m, nn.ConvTranspose2d)],
                   is_transposed=True)
 
-
 class ResizeDecoder(nn.Module):
     """ Decodes a feture vector into an image using resized convolutions.
-    
-    Upsampling is done directly in each feature map using interpolation. Each upsampling 
+
+    Upsampling is done directly in each feature map using interpolation. Each upsampling
     is followed by a convolution (1x1 for the first two upsamplings, 3 x 3 afterwards).
-    
-    Initial upsampling from 1x1 to 4x4 is done with a transposed convolution. Otherwise, 
+
+    Initial upsampling from 1x1 to 4x4 is done with a transposed convolution. Otherwise,
     the same vector is repeated at all x, y positions and any kernel on this feature maps
     will produce the exact value for all x, y positions (as the inputs will be exactly the
-    same everywhere) and all the way to the reconstruction all channels will hve the same 
-    value everywhere (i.e., it is just able t predict a single color). This symmetry could 
-    have also been broken byusing zero padding rather tha reflection padding but seems 
-    pretty ad hoc. 
-    
+    same everywhere) and all the way to the reconstruction all channels will hve the same
+    value everywhere (i.e., it is just able t predict a single color). This symmetry could
+    have also been broken byusing zero padding rather tha reflection padding but seems
+    pretty ad hoc.
+
     Input: N x in_channels
     Output: N x out_channels x 128 x 128
-    
+
     Arguments:
         in_channels (int): Size of the input feature vector.
         out_channels (int): Number of channels in the expected output image.
@@ -166,7 +385,7 @@ class ResizeDecoder(nn.Module):
 
         # Create layers
         layers = [
-            nn.ConvTranspose2d(in_channels, 128, kernel_size=4, bias=False), # 4 x 4            
+            nn.ConvTranspose2d(in_channels, 128, kernel_size=4, bias=False), # 4 x 4
             nn.BatchNorm2d(128),
             nn.ReLU(inplace=True),
             nn.Upsample(scale_factor=2, mode=mode),
@@ -201,6 +420,303 @@ class ResizeDecoder(nn.Module):
         init_bn(m for m in self.layers if isinstance(m, nn.BatchNorm2d))
         init_conv([m for m in self.layers if isinstance(m, nn.ConvTranspose2d)],
                   is_transposed=True)
+
+
+# DEEPER
+# class ResizeDecoder(nn.Module):
+#     """ Decodes a feture vector into an image using resized convolutions.
+
+#     Upsampling is done directly in each feature map using interpolation. Each upsampling
+#     is followed by a convolution (1x1 for the first two upsamplings, 3 x 3 afterwards).
+
+#     Initial upsampling from 1x1 to 4x4 is done with a transposed convolution. Otherwise,
+#     the same vector is repeated at all x, y positions and any kernel on this feature maps
+#     will produce the exact value for all x, y positions (as the inputs will be exactly the
+#     same everywhere) and all the way to the reconstruction all channels will hve the same
+#     value everywhere (i.e., it is just able t predict a single color). This symmetry could
+#     have also been broken byusing zero padding rather tha reflection padding but seems
+#     pretty ad hoc.
+
+#     Input: N x in_channels
+#     Output: N x out_channels x 128 x 128
+
+#     Arguments:
+#         in_channels (int): Size of the input feature vector.
+#         out_channels (int): Number of channels in the expected output image.
+#         mode (str): Usampling mode sent to nn.Upsample. Usually 'bilinear' or 'nearest'.
+#     """
+#     def __init__(self, in_channels=128, out_channels=3, mode='nearest'):
+#         super().__init__()
+
+#         # Create layers
+#         layers = [
+#             nn.ConvTranspose2d(in_channels, 128, kernel_size=4,
+#                                bias=False),  # 4 x 4
+#             nn.BatchNorm2d(128),
+#             nn.ReLU(inplace=True),
+#             nn.Conv2d(128, 128, kernel_size=3, padding=1, padding_mode='reflect',
+#                       bias=False),
+#             nn.BatchNorm2d(128),
+#             nn.ReLU(inplace=True),
+#             nn.Upsample(scale_factor=2, mode=mode),
+
+#             nn.Conv2d(128, 64, kernel_size=3, padding=1, padding_mode='reflect',
+#                       bias=False),
+#             nn.BatchNorm2d(64),
+#             nn.ReLU(inplace=True),
+#             nn.Conv2d(64, 64, kernel_size=3, padding=1, padding_mode='reflect',
+#                       bias=False),
+#             nn.BatchNorm2d(64),
+#             nn.ReLU(inplace=True),
+#             nn.Upsample(scale_factor=2, mode=mode),
+
+#             nn.Conv2d(64, 64, kernel_size=3, padding=1, padding_mode='reflect',
+#                       bias=False),
+#             nn.BatchNorm2d(64),
+#             nn.ReLU(inplace=True),
+#                         nn.Conv2d(64, 64, kernel_size=3, padding=1, padding_mode='reflect',
+#                       bias=False),
+#             nn.BatchNorm2d(64),
+#             nn.ReLU(inplace=True),
+#             nn.Upsample(scale_factor=2, mode=mode),
+
+#             nn.Conv2d(64, 32, kernel_size=3, padding=1, padding_mode='reflect',
+#                       bias=False),
+#             nn.BatchNorm2d(32),
+#             nn.ReLU(inplace=True),
+#             nn.Conv2d(32, 32, kernel_size=3, padding=1, padding_mode='reflect',
+#                       bias=False),
+#             nn.BatchNorm2d(32),
+#             nn.ReLU(inplace=True),
+#             nn.Upsample(scale_factor=2, mode=mode),
+
+#             nn.Conv2d(32, 32, kernel_size=3, padding=1, padding_mode='reflect',
+#                       bias=False),
+#             nn.BatchNorm2d(32),
+#             nn.ReLU(inplace=True),
+#             nn.Conv2d(32, 32, kernel_size=3, padding=1, padding_mode='reflect',
+#                       bias=False),
+#             nn.BatchNorm2d(32),
+#             nn.ReLU(inplace=True),
+#             nn.Upsample(scale_factor=2, mode=mode),
+
+#             nn.Conv2d(32, out_channels, kernel_size=3, padding=1, padding_mode='reflect')]
+#         self.layers = nn.Sequential(*layers)
+
+#     def forward(self, x):
+#         return self.layers(x.unsqueeze(-1).unsqueeze(-1))
+
+#     def init_parameters(self):
+#         init_conv(m for m in self.layers if isinstance(m, nn.Conv2d))
+#         init_bn(m for m in self.layers if isinstance(m, nn.BatchNorm2d))
+#         init_conv([m for m in self.layers if isinstance(m, nn.ConvTranspose2d)],
+#                   is_transposed=True)
+
+
+# class ResidualBlock2(nn.Module):
+#     """ A single residual block.
+#     Two layers (or three for bottleneck blocks) and a shortcut connection from the input
+#     to the output. Preserves spatial dimensions and number of feature maps.
+#     Arguments:
+#         in_channels (int): Number of feature maps in the input (and output)
+#         use_bottleneck (bool): Whether to use bottleneck blocks.
+#         bottleneck_factor (float): Factor to reduce feature maps in the bottleneck layer.
+#     """
+#     def __init__(self, in_channels, out_channels):
+#         super().__init__()
+
+#         if out_channels == 128: #TODO: AD HOC: first layer
+#             conv =  nn.ConvTranspose2d(in_channels, 128, kernel_size=4, bias=False)  # 4 x 4
+#         else:
+#             conv = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, padding_mode='reflect',
+#                         bias=False)
+
+
+#         self.layers = nn.Sequential(
+#             conv,
+#             nn.BatchNorm2d(out_channels), nn.ReLU(inplace=True),
+#             nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1, padding_mode='reflect',
+#                         bias=False),
+#             nn.BatchNorm2d(out_channels),
+#         )
+
+#         if in_channels != out_channels:
+#             self.down = nn.Conv2d(in_channels, out_channels, 1)
+#         else:
+#             self.down = nn.Identity()
+#         if out_channels == 128:
+#             self.down = nn.Sequential(
+#                 nn.Conv2d(in_channels, out_channels, 1),
+#                 nn.Upsample(scale_factor=4, mode='nearest'),)
+
+#     def forward(self, input_):
+#         self.output = F.relu(self.layers(input_) + self.down(input_))
+#         return self.output
+
+#     def init_parameters(self):
+#         init_conv(module for module in self.layers if isinstance(module, nn.Conv2d))
+#         init_bn(module for module in self.layers if isinstance(module, nn.BatchNorm2d))
+#         init_conv([m for m in self.layers if isinstance(m, nn.ConvTranspose2d)],
+#                   is_transposed=True)
+
+
+# #RESIDUAL
+# class ResizeDecoder(nn.Module):
+#     """ Decodes a feture vector into an image using resized convolutions.
+
+#     Upsampling is done directly in each feature map using interpolation. Each upsampling
+#     is followed by a convolution (1x1 for the first two upsamplings, 3 x 3 afterwards).
+
+#     Initial upsampling from 1x1 to 4x4 is done with a transposed convolution. Otherwise,
+#     the same vector is repeated at all x, y positions and any kernel on this feature maps
+#     will produce the exact value for all x, y positions (as the inputs will be exactly the
+#     same everywhere) and all the way to the reconstruction all channels will hve the same
+#     value everywhere (i.e., it is just able t predict a single color). This symmetry could
+#     have also been broken byusing zero padding rather tha reflection padding but seems
+#     pretty ad hoc.
+
+#     Input: N x in_channels
+#     Output: N x out_channels x 128 x 128
+
+#     Arguments:
+#         in_channels (int): Size of the input feature vector.
+#         out_channels (int): Number of channels in the expected output image.
+#         mode (str): Usampling mode sent to nn.Upsample. Usually 'bilinear' or 'nearest'.
+#     """
+#     def __init__(self, in_channels=128, out_channels=3, mode='nearest'):
+#         super().__init__()
+
+#         # Create layers
+#         layers = [
+#             ResidualBlock2(in_channels, 128),
+#             nn.Upsample(scale_factor=2, mode=mode),
+
+#             ResidualBlock2(128, 64),
+#             nn.Upsample(scale_factor=2, mode=mode),
+
+#             ResidualBlock2(64, 64),
+#             nn.Upsample(scale_factor=2, mode=mode),
+
+#             ResidualBlock2(64, 32),
+#             nn.Upsample(scale_factor=2, mode=mode),
+
+#             ResidualBlock2(32, 32),
+#             nn.Upsample(scale_factor=2, mode=mode),
+
+#             nn.Conv2d(32, out_channels, kernel_size=3, padding=1, padding_mode='reflect')]
+#         self.layers = nn.Sequential(*layers)
+
+#     def forward(self, x):
+#         return self.layers(x.unsqueeze(-1).unsqueeze(-1))
+
+#     def init_parameters(self):
+#         init_conv(m for m in self.layers if isinstance(m, nn.Conv2d))
+#         init_bn(m for m in self.layers if isinstance(m, nn.BatchNorm2d))
+#         init_conv([m for m in self.layers if isinstance(m, nn.ConvTranspose2d)],
+#                   is_transposed=True)
+#         for m in self.layers[:-1]:
+#             if isinstance(m, ResidualBlock2):
+#                 m.init_parameters()
+
+#             ResidualBlock2(128, 64),
+#             nn.Upsample(scale_factor=2, mode=mode),
+
+#             ResidualBlock2(64, 64),
+#             nn.Upsample(scale_factor=2, mode=mode),
+
+#             ResidualBlock2(64, 32),
+#             nn.Upsample(scale_factor=2, mode=mode),
+
+#             ResidualBlock2(32, 32),
+#             nn.Upsample(scale_factor=2, mode=mode),
+
+#             nn.Conv2d(32, out_channels, kernel_size=3, padding=1, padding_mode='reflect')]
+#         self.layers = nn.Sequential(*layers)
+
+#     def forward(self, x):
+#         return self.layers(x.unsqueeze(-1).unsqueeze(-1))
+
+#     def init_parameters(self):
+#         init_conv(m for m in self.layers if isinstance(m, nn.Conv2d))
+#         init_bn(m for m in self.layers if isinstance(m, nn.BatchNorm2d))
+#         init_conv([m for m in self.layers if isinstance(m, nn.ConvTranspose2d)],
+#                   is_transposed=True)
+#         for m in self.layers[:-1]:
+#             if isinstance(m, ResidualBlock2):
+#                 m.init_parameters()
+
+
+
+
+
+
+
+
+#WIDER
+# class ResizeDecoder(nn.Module):
+#     """ Decodes a feture vector into an image using resized convolutions.
+
+#     Upsampling is done directly in each feature map using interpolation. Each upsampling
+#     is followed by a convolution (1x1 for the first two upsamplings, 3 x 3 afterwards).
+
+#     Initial upsampling from 1x1 to 4x4 is done with a transposed convolution. Otherwise,
+#     the same vector is repeated at all x, y positions and any kernel on this feature maps
+#     will produce the exact value for all x, y positions (as the inputs will be exactly the
+#     same everywhere) and all the way to the reconstruction all channels will hve the same
+#     value everywhere (i.e., it is just able t predict a single color). This symmetry could
+#     have also been broken byusing zero padding rather tha reflection padding but seems
+#     pretty ad hoc.
+
+#     Input: N x in_channels
+#     Output: N x out_channels x 128 x 128
+
+#     Arguments:
+#         in_channels (int): Size of the input feature vector.
+#         out_channels (int): Number of channels in the expected output image.
+#         mode (str): Usampling mode sent to nn.Upsample. Usually 'bilinear' or 'nearest'.
+#     """
+#     def __init__(self, in_channels=128, out_channels=3, mode='nearest'):
+#         super().__init__()
+
+#         # Create layers
+#         layers = [
+#             nn.ConvTranspose2d(in_channels, 256, kernel_size=4, bias=False), # 4 x 4
+#             nn.BatchNorm2d(256),
+#             nn.ReLU(inplace=True),
+#             nn.Upsample(scale_factor=2, mode=mode),
+#             nn.Conv2d(256, 128, kernel_size=3, padding=1, padding_mode='reflect',
+#                       bias=False),
+#             nn.BatchNorm2d(128),
+#             nn.ReLU(inplace=True),
+#             nn.Upsample(scale_factor=2, mode=mode),
+#             nn.Conv2d(128, 128, kernel_size=3, padding=1, padding_mode='reflect',
+#                       bias=False),
+#             nn.BatchNorm2d(128),
+#             nn.ReLU(inplace=True),
+#             nn.Upsample(scale_factor=2, mode=mode),
+#             nn.Conv2d(128, 64, kernel_size=3, padding=1, padding_mode='reflect',
+#                       bias=False),
+#             nn.BatchNorm2d(64),
+#             nn.ReLU(inplace=True),
+#             nn.Upsample(scale_factor=2, mode=mode),
+#             nn.Conv2d(64, 64, kernel_size=3, padding=1, padding_mode='reflect',
+#                       bias=False),
+#             nn.BatchNorm2d(64),
+#             nn.ReLU(inplace=True),
+#             nn.Upsample(scale_factor=2, mode=mode),
+#             nn.Conv2d(64, out_channels, kernel_size=3, padding=1, padding_mode='reflect')]
+#         self.layers = nn.Sequential(*layers)
+
+#     def forward(self, x):
+#         return self.layers(x.unsqueeze(-1).unsqueeze(-1))
+
+#     def init_parameters(self):
+#         init_conv(m for m in self.layers if isinstance(m, nn.Conv2d))
+#         init_bn(m for m in self.layers if isinstance(m, nn.BatchNorm2d))
+#         init_conv([m for m in self.layers if isinstance(m, nn.ConvTranspose2d)],
+#                   is_transposed=True)
+
+
 
 
 class PixelShuffleDecoder(nn.Module):
