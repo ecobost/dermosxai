@@ -66,6 +66,14 @@ def crop_to_ratio(im, desired_ratio=4/3):
 
     return cropped_image
 
+def tprint(*messages):
+    """ Prints a message (with a timestamp next to it).
+    
+    Arguments:
+        message (string): Arguments to be print()'d.
+    """
+    formatted_time = '[{}]'.format(time.ctime())
+    print(formatted_time, *messages, flush=True)
 
 def create_grid(ims, num_rows=3, num_cols=4, row_gap=5, col_gap=5, bg_value=1):
     """ Creates a grid of images from individual images.
@@ -95,12 +103,22 @@ def create_grid(ims, num_rows=3, num_cols=4, row_gap=5, col_gap=5, bg_value=1):
 
     return grid
 
-
-def tprint(*messages):
-    """ Prints a message (with a timestamp next to it).
+def to_npy(torch_im, img_mean=0, img_std=1):
+    """ Transform a (batch of) torch.Float tensor image(s) into a numpy array.
     
     Arguments:
-        message (string): Arguments to be print()'d.
+        torch_im (torch.FloatTensor): A 3-d or 4-d tensor with the image(s) in the 
+            (N x ... x) C x H x W format.
+        mean, std (int or np.array): Mean and standard deviation (broadcastable to 
+            H x W x C) that will be used to unnormalize the image.
+    
+    Returns:
+        A (n x h x w x c) np.float array with the (possibly unnormalized) images in the 
+            [0, 1] range.
     """
-    formatted_time = '[{}]'.format(time.ctime())
-    print(formatted_time, *messages, flush=True)
+    if torch_im.ndim < 3:
+        raise ValueError('Only works for images with at least one channel (>= 3-d).')
+    
+    im = np.moveaxis(torch_im.detach().cpu().numpy(), -3, -1)
+    im = (im * img_std + img_mean)
+    return im
