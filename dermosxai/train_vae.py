@@ -16,13 +16,14 @@ from dermosxai import datasets, models, utils
 
 def get_hyperparams():
     """ Returns a list of hyperparams to run."""
-    import itertools
-
     # test some initial hyperparams
-    # for lr, wd, a, beta in itertools.product([1e-4, 1e-3, 1e-2], [0, 1e-4, 1e-2], ['flips', 'full'], [0.36, 1, 3.6]) :
-    #     yield {'learning_rate': lr, 'weight_decay': wd, 'augmentation': a, 'beta_weight': beta}
+    import itertools
+    for lr, wd, a in itertools.product([1e-4, 1e-3, 1e-2], [0, 1e-6, 1e-4], ['flips', 'full']) :
+        yield {'learning_rate': lr, 'weight_decay': wd, 'augmentation': a}
+    
+    # test batch size with transposed
+    # return [{'batch_size': 32, 'batch_size': 64}]
 
-    #TODO: decoder, batchsize
 
 def train_all():
     for params in get_hyperparams():
@@ -44,14 +45,14 @@ def train_one(param_id):
     return train(**selected_params)
 
 
-def train(decoder='resize', seed=19, batch_size=64, learning_rate=0.001, weight_decay=0,
+def train(decoder='transposed', seed=19, batch_size=64, learning_rate=0.001, weight_decay=0,
           num_epochs=200, decay_epochs=5, lr_decay=0.1, stopping_epochs=25,
           loss_function='beta-vae', beta_weight=1, augmentation='flips'):
     """ Trains a VAE with ADAM and early stopping.
     
     Arguments:
         decoder(string): Type of decoder architecture for the VAE. One of "resize", 
-            "transposed", "shuffled" and "broadcast". See models.py for details.
+            "transposed", "shuffle" and "broadcast". See models.py for details.
         seed(int): Random seed for torch and numpy
         batch_size (int): Batch size.
         learning_rate (float): Initial learning rate for the optimizer.
@@ -80,8 +81,8 @@ def train(decoder='resize', seed=19, batch_size=64, learning_rate=0.001, weight_
         'num_epochs': num_epochs, 'decay_epochs': decay_epochs, 'lr_decay': lr_decay,
         'stopping_epochs': stopping_epochs, 'loss_function': loss_function,
         'beta_weight': beta_weight, 'augmentation': augmentation}
-    wandb.init(project='dermosxai_vae', group='ham10K-only', config=hyperparams, 
-               dir='/src/dermosxai/data')
+    wandb.init(project='dermosxai_vae', group='ham10K-only', config=hyperparams,
+               dir='/src/dermosxai/data', tags=['transposed_search'])
 
     # Set random seed
     torch.manual_seed(seed)
@@ -211,7 +212,7 @@ def train(decoder='resize', seed=19, batch_size=64, learning_rate=0.001, weight_
                 wandb.log({'epoch': epoch, 'val_nll': val_nll.item(),
                           'val_kl': val_kl.item(), 'val_loss': val_loss.item()})
                 utils.tprint(f'Validation loss {val_loss.item():.0f}',
-                             f'(MSE: {val_nll.item():.0f}, KL: {kl.item():.0f})')
+                             f'(MSE: {val_nll.item():.0f}, KL: {val_kl.item():.0f})')
             elif loss_function == 'tcvae':
                 raise NotImplementedError("not yet")
             else:
@@ -234,8 +235,8 @@ def train(decoder='resize', seed=19, batch_size=64, learning_rate=0.001, weight_
         if val_nll < best_nll:
             utils.tprint('Saving best model')
             best_epoch = epoch
-            best_nll = val_nll
-            best_kl = val_kl
+            best_nll = val_nll.item()
+            best_kl = val_kl.item()
             best_model = copy.deepcopy(model).cpu()
 
         # Stop training if validation has not improved in x number of epochs
