@@ -17,12 +17,12 @@ from dermosxai import datasets, models, utils
 def get_hyperparams():
     """ Returns a list of hyperparams to run."""
     # test some initial hyperparams
-    import itertools
-    for lr, wd, a in itertools.product([1e-4, 1e-3, 1e-2], [0, 1e-6, 1e-4], ['flips', 'full']) :
-        yield {'learning_rate': lr, 'weight_decay': wd, 'augmentation': a}
-    
+    # import itertools
+    # for lr, wd, a in itertools.product([1e-4, 1e-3, 1e-2], [0, 1e-6, 1e-4], ['flips', 'full']) :
+    #     yield {'learning_rate': lr, 'weight_decay': wd, 'augmentation': a}
+
     # test batch size with transposed
-    # return [{'batch_size': 32, 'batch_size': 64}]
+    return [{'batch_size': 64, 'seed': 234}]
 
 
 def train_all():
@@ -52,7 +52,7 @@ def train(decoder='transposed', seed=19, batch_size=64, learning_rate=0.001, wei
     
     Arguments:
         decoder(string): Type of decoder architecture for the VAE. One of "resize", 
-            "transposed", "shuffle" and "broadcast". See models.py for details.
+            "transposed" or "shuffle". See models.py for details.
         seed(int): Random seed for torch and numpy
         batch_size (int): Batch size.
         learning_rate (float): Initial learning rate for the optimizer.
@@ -86,7 +86,7 @@ def train(decoder='transposed', seed=19, batch_size=64, learning_rate=0.001, wei
 
     # Set random seed
     torch.manual_seed(seed)
-    #torch.backends.cudnn.deterministic = True
+    # torch.use_deterministic_algorithms(True)
 
     # Get datasets
     utils.tprint('Loading dsets')
