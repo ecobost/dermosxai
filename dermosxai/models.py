@@ -23,30 +23,6 @@ def init_bn(modules):
         nn.init.constant_(module.bias, 0)
 
 
-# TODO: Delete, this is correct but it doesn't change much
-# def init_after_vae(module, is_transposed=False):
-#     """ Initializes the module that comes right after the VAE sampling step.
-    
-#     Sampled zs are not N(0, 1) distributed but rather N(u_x, sigma_x) where u_x ~ N(0, 1) 
-#     and sigma_x ~ logNormal(0, 1). If we want Var(W'.x) = 1, W should have 
-#     1 / (fan_in * (e + 1)) variance.
-    
-#     Arguments:
-#         module (torch.Tensor): The operation that comes after the sampling (Linear, Conv 
-#             or ConvTranspose).
-#         is_transposed (bool): Whether the module is a transposed convolution. fan_in needs
-#             to be computed slightly different
-#     """
-#     import math
-#     fan_in = module.weight.shape[0] if is_transposed else module.weight.shape[1]
-#     std = 1 / math.sqrt(fan_in * (math.exp(2) + 1))
-#     with torch.no_grad():
-#         module.weight.normal_(0, std)
-
-#     if module.bias is not None:
-#         nn.init.constant_(module.bias, 0)
-
-
 class ConvEncoder(nn.Module):
     """ Encodes an 2d input into a single dimensional feature vector using convs.
 
@@ -306,17 +282,6 @@ class VAE(nn.Module):
         self.sample_z = True # whether to sample z from q(z|x) or return the mean
 
 
-
-        #TODO: Delete
-        # self.conv1 = nn.Conv2d(img_channels, 16, kernel_size=3, padding=1,
-        #                        padding_mode='reflect')
-        # self.bn1 = nn.BatchNorm2d(16)
-
-        # self.bn_last = nn.BatchNorm2d(16)
-        # self.conv_last = nn.Conv2d(16, img_channels, kernel_size=3, padding=1,
-        #                            padding_mode='reflect')
-
-
     def encode(self, x):
         """Takes original image to predicted mu and sigma for the proposal distribution. 
         
@@ -331,12 +296,6 @@ class VAE(nn.Module):
         # Resizing image to 128 x 128
         self.original_dims = x.shape[2:] # used for resizing
         resized_x = F.interpolate(x, (128, 128))#, mode='bilinear', align_corners=False)
-
-
-        # #TODO:
-        # resized_x = F.interpolate(self.conv1(x), (128, 128))
-        # resized_x = F.relu(self.bn1(resized_x), inplace=True)
-
 
         # Encode image into u, sigma for gaussian q distribution
         q_params = self.encoder(resized_x)
@@ -358,14 +317,6 @@ class VAE(nn.Module):
         """ Takes a hidden vector to image. """
         recons = self.decoder(z)
         resized_recons = F.interpolate(recons, self.original_dims)#, mode='bilinear', align_corners=False)
-
-
-        # #TODO:
-        # resized_recons = F.relu(self.bn_last(recons), inplace=True)
-        # resized_recons = self.conv_last(F.interpolate(recons, self.original_dims))
-
-
-
 
         return resized_recons
 
@@ -390,11 +341,6 @@ class VAE(nn.Module):
     def init_parameters(self):
         self.encoder.init_parameters()
         self.decoder.init_parameters()
-
-
-        # #TODO:
-        # init_conv([self.conv1, self.conv_last])
-        # init_bn([self.bn1, self.bn_last])
 
 
 # When doing the VAE where the intermediate features are shared, I can reuse the
