@@ -4,7 +4,7 @@ import time
 
 
 
-def crop_black_edges(im, threshold=8):
+def crop_black_edges(im, threshold=10):
     """ Crops black edges around an image by transforming it into grayscale (if needed), 
     thresholding it and then dropping any rows/cols with no value above the threshold.
 
