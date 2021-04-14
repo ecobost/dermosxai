@@ -23,6 +23,30 @@ def init_bn(modules):
         nn.init.constant_(module.bias, 0)
 
 
+# TODO: Delete, this is correct but it doesn't change much
+# def init_after_vae(module, is_transposed=False):
+#     """ Initializes the module that comes right after the VAE sampling step.
+    
+#     Sampled zs are not N(0, 1) distributed but rather N(u_x, sigma_x) where u_x ~ N(0, 1) 
+#     and sigma_x ~ logNormal(0, 1). If we want Var(W'.x) = 1, W should have 
+#     1 / (fan_in * (e + 1)) variance.
+    
+#     Arguments:
+#         module (torch.Tensor): The operation that comes after the sampling (Linear, Conv 
+#             or ConvTranspose).
+#         is_transposed (bool): Whether the module is a transposed convolution. fan_in needs
+#             to be computed slightly different
+#     """
+#     import math
+#     fan_in = module.weight.shape[0] if is_transposed else module.weight.shape[1]
+#     std = 1 / math.sqrt(fan_in * (math.exp(2) + 1))
+#     with torch.no_grad():
+#         module.weight.normal_(0, std)
+
+#     if module.bias is not None:
+#         nn.init.constant_(module.bias, 0)
+
+
 class ConvEncoder(nn.Module):
     """ Encodes an 2d input into a single dimensional feature vector using convs.
 
@@ -71,7 +95,6 @@ class ConvEncoder(nn.Module):
     def init_parameters(self):
         init_conv(m for m in self.layers if isinstance(m, nn.Conv2d))
         init_bn(m for m in self.layers if isinstance(m, nn.BatchNorm2d))
-        
 
 class UnPad(nn.Module):
     """ Inverse of padding. Drops some edge around an image. 
@@ -251,82 +274,6 @@ class PixelShuffleDecoder(nn.Module):
         init_bn(m for m in self.layers if isinstance(m, nn.BatchNorm2d))
 
 
-class AddCoords(nn.Module):
-    """Add x, y channels to an image with [-1, 1] px coordinates.
-    
-    Arguments:
-        height, width (int): Size of the mesh of coordinates to add.
-    """
-    def __init__(self, height=128, width=128):
-        super().__init__()
-
-        # Create mesh
-        x = torch.linspace(-1, 1, width)
-        y = torch.linspace(-1, 1, height)
-        mesh = torch.meshgrid(y, x)
-        mesh = torch.stack(mesh, 0)[None, ...]  # 1 x 2 x height x width
-        self.register_buffer('mesh', mesh)
-
-    def forward(self, x):
-        tiled_mesh = torch.tile(self.mesh, (x.shape[0], 1, 1, 1))
-        x_plus_coord = torch.cat([tiled_mesh, x], 1)
-        return x_plus_coord
-
-
-class BroadcastDecoder(nn.Module):
-    """ Decodes a feture vector into an image using a spatial broadcast decoder
-    (Watters et al., 2019).
-    
-    Tile the feature vector to the desired final size, add x-y coordinates as two extra 
-    feature maps and then apply normal convolutions.
-    
-    Input: N x in_channels
-    Output: N x out_channels x 128 x 128
-    
-    Arguments:
-        in_channels (int): Size of the input feature vector.
-        out_channels (int): Number of channels in the expected output image.
-    """
-    def __init__(self, in_channels=128, out_channels=3):
-        super().__init__()
-
-        # Create layers
-        layers = [
-            nn.Upsample(128),
-            AddCoords(128, 128),
-            nn.Conv2d(in_channels + 2, 128, kernel_size=3, padding=1, padding_mode='reflect',
-                      bias=False),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(128, 64, kernel_size=3, padding=1, padding_mode='reflect',
-                      bias=False),
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True),
-            # nn.Conv2d(64, 64, kernel_size=3, padding=1, padding_mode='reflect',
-            #           bias=False),
-            # nn.BatchNorm2d(64),
-            # nn.ReLU(inplace=True),
-            nn.Conv2d(64, 32, kernel_size=3, padding=1, padding_mode='reflect',
-                      bias=False),
-            nn.BatchNorm2d(32),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(32, 32, kernel_size=3, padding=1, padding_mode='reflect',
-                      bias=False),
-            nn.BatchNorm2d(32),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(32, out_channels, kernel_size=3, padding=1,
-                      padding_mode='reflect'),
-        ]
-        self.layers = nn.Sequential(*layers)
-
-    def forward(self, x):
-        return self.layers(x.unsqueeze(-1).unsqueeze(-1))
-
-    def init_parameters(self):
-        init_conv(m for m in self.layers if isinstance(m, nn.Conv2d))
-        init_bn(m for m in self.layers if isinstance(m, nn.BatchNorm2d))
-
-
 class VAE(nn.Module):
     """ VAE with a multivariate normal q(z|x) with diagonal covariance matrix.
     
@@ -335,10 +282,9 @@ class VAE(nn.Module):
         hidden_dims (int): Number of variables in the intermediate representation. The 
             encoder predicts twice as many features, the second half are the log(std) 
             components.
-        decoder (str): Decoder to use. One of "transposed", "resize", "shuffle" or 
-            "broadcast".
+        decoder (str): Decoder to use. One of "transposed", "resize" or "shuffle".
     """
-    def __init__(self, img_channels=3, hidden_dims=128, decoder='resize'):
+    def __init__(self, img_channels=3, hidden_dims=128, decoder='transposed'):
 
         super().__init__()
 
@@ -352,14 +298,24 @@ class VAE(nn.Module):
             self.decoder = ResizeDecoder(hidden_dims, img_channels)
         elif decoder == 'shuffle':
             self.decoder = PixelShuffleDecoder(hidden_dims, img_channels)
-        elif decoder == 'broadcast':
-            self.decoder = BroadcastDecoder(hidden_dims, img_channels)
         else:
             raise ValueError(f"Decoder '{decoder}' not recognized.")
 
         # Save params
         self.hidden_dims=hidden_dims
         self.sample_z = True # whether to sample z from q(z|x) or return the mean
+
+
+
+        #TODO: Delete
+        # self.conv1 = nn.Conv2d(img_channels, 16, kernel_size=3, padding=1,
+        #                        padding_mode='reflect')
+        # self.bn1 = nn.BatchNorm2d(16)
+
+        # self.bn_last = nn.BatchNorm2d(16)
+        # self.conv_last = nn.Conv2d(16, img_channels, kernel_size=3, padding=1,
+        #                            padding_mode='reflect')
+
 
     def encode(self, x):
         """Takes original image to predicted mu and sigma for the proposal distribution. 
@@ -369,33 +325,48 @@ class VAE(nn.Module):
         
         Returns:
             mu (torch.FloatTensor): A (N x hidden_dims) vector with the predicted means.
-            sigma (torch.FloatTensor): A (N x hidden_dims) vector with the predicted stds.
+            logsigma (torch.FloatTensor): A (N x hidden_dims) vector with the predicted 
+                logstds. std = exp(logsigma)
         """
         # Resizing image to 128 x 128
         self.original_dims = x.shape[2:] # used for resizing
-        resized_x = F.interpolate(x, (128, 128), mode='bilinear', align_corners=False)
+        resized_x = F.interpolate(x, (128, 128))#, mode='bilinear', align_corners=False)
+
+
+        # #TODO:
+        # resized_x = F.interpolate(self.conv1(x), (128, 128))
+        # resized_x = F.relu(self.bn1(resized_x), inplace=True)
+
 
         # Encode image into u, sigma for gaussian q distribution
         q_params = self.encoder(resized_x)
-        mu, sigma = self._decode_gaussian_params(q_params)
+        mu, logsigma = self._decode_gaussian_params(q_params)
 
-        return mu, sigma
+        return mu, logsigma
 
     def _decode_gaussian_params(self, q_params):
-        """ Takes the intermediate representation and transforms it into mean and sigma 
+        """ Takes the intermediate representation and transforms it into mean and logsigma 
         for the q(z|x) distribution.
         
         First half of the vector is the mean and the second part the logsigma.
         """
         mu = q_params[:, :self.hidden_dims]
-        sigma = torch.exp(q_params[:, self.hidden_dims:])
-        return mu, sigma
+        logsigma = q_params[:, self.hidden_dims:]
+        return mu, logsigma
 
     def decode(self, z):
         """ Takes a hidden vector to image. """
         recons = self.decoder(z)
-        resized_recons = F.interpolate(recons, self.original_dims, mode='bilinear',
-                                       align_corners=False)
+        resized_recons = F.interpolate(recons, self.original_dims)#, mode='bilinear', align_corners=False)
+
+
+        # #TODO:
+        # resized_recons = F.relu(self.bn_last(recons), inplace=True)
+        # resized_recons = self.conv_last(F.interpolate(recons, self.original_dims))
+
+
+
+
         return resized_recons
 
     def train(self, mode=True):
@@ -406,19 +377,24 @@ class VAE(nn.Module):
         """ Forward and return all intermediate values.
         
         Returns:
-            q_params (tuple): Predicted params (mu, sigma) for the gaussian q(z|x) 
+            q_params (tuple): Predicted params (mu, logsigma) for the gaussian q(z|x) 
                 distribution.
             z (torch.Tensor): Sampled value from q(z|x) (with the predicted params).
             recons (torch.Tensor): Reconstructed image from the sample z.
         """
-        mu, sigma = self.encode(x)
-        z = gaussian_sample(mu, sigma) if self.sample_z else mu
+        mu, logsigma = self.encode(x)
+        z = gaussian_sample(mu, torch.exp(logsigma)) if self.sample_z else mu
         recons = self.decode(z)
-        return (mu, sigma), z, recons
+        return (mu, logsigma), z, recons
 
     def init_parameters(self):
         self.encoder.init_parameters()
         self.decoder.init_parameters()
+
+
+        # #TODO:
+        # init_conv([self.conv1, self.conv_last])
+        # init_bn([self.bn1, self.bn_last])
 
 
 # When doing the VAE where the intermediate features are shared, I can reuse the
@@ -444,18 +420,20 @@ def gaussian_sample(mu, sigma):
     return mu + noise * sigma
 
 
-def gaussian_KL(mu, sigma):
+def gaussian_KL(mu, logsigma):
     """ Analytically compute KL divergence between the multivariate gaussian defined by 
     the input params (assuming diagonal covariance matrix) and N(0, I). 
     
     Arguments:
         mu (torch.Tensor): Mean. Expected size (N x num_variables)
-        sigma (torch.Tensor): Standard deviation. Same size as mean.
+        logsigma (torch.Tensor): Natural logarithm of the standard deviation. Same size 
+            as mean.
     
     Returns:
         kl (torch.Tensor): KL divergence for each example in the batch.
     """
-    kl = ((sigma**2 - 1).sum(-1) + (mu**2).sum(-1)) / 2 - torch.log(sigma).sum(-1)
+    #kl = ((sigma**2 + mu**2) / 2 - torch.log(sigma) - 0.5).sum(-1) # unstable
+    kl = ((torch.exp(2 * logsigma) + mu**2)/ 2 - logsigma - 0.5).sum(-1)
     return kl
 
 
@@ -472,5 +450,5 @@ def approx_kl(p, q, z):
         kl (torch.Tensor): KL divergence estimate.
     """
     raise NotImplementedError('Test and make sure this is alright!')
-    kl = (p.log_prob(z) - q.log_prob(z)).sum(axis=-1).mean(0)
+    kl = (p.log_prob(z) - q.log_prob(z)).sum(axis=-1)
     return kl
