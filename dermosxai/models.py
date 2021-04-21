@@ -366,7 +366,7 @@ def gaussian_sample(mu, sigma):
     return mu + noise * sigma
 
 
-def gaussian_KL(mu, logsigma):
+def gaussian_kl(mu, logsigma):
     """ Analytically compute KL divergence between the multivariate gaussian defined by 
     the input params (assuming diagonal covariance matrix) and N(0, I). 
     
@@ -377,13 +377,16 @@ def gaussian_KL(mu, logsigma):
     
     Returns:
         kl (torch.Tensor): KL divergence for each example in the batch.
+        
+    Note:
+        Same result as torch.distributions.kl_divergence(q, p)
     """
     #kl = ((sigma**2 + mu**2) / 2 - torch.log(sigma) - 0.5).sum(-1) # unstable
     kl = ((torch.exp(2 * logsigma) + mu**2)/ 2 - logsigma - 0.5).sum(-1)
     return kl
 
 
-#TODO: Actually implement this
+#TODO: Actually implement this if needed (i.e., if TCVAE is not better than beta-VAE)
 def approx_kl(p, q, z):
     """ Compute a MonteCarlo approximation of the KL(q|p): 1/n * (log(q(z)) - log(p(z))) 
     
@@ -396,5 +399,21 @@ def approx_kl(p, q, z):
         kl (torch.Tensor): KL divergence estimate.
     """
     raise NotImplementedError('Test and make sure this is alright!')
-    kl = (p.log_prob(z) - q.log_prob(z)).sum(axis=-1)
+    kl = (q.log_prob(z) - p.log_prob(z)).sum(axis=-1)
     return kl
+
+def kl_tc_decomposition(z):
+    """ Returns the ELBO decomposition from Chen et al. 2018.
+    
+    Arguments:
+        mu 
+        logsigma
+        z (torch.FloatTensor): Samples (N x num_variables).
+        
+    Returns:
+        ic (float): Index Code Mutual Information.
+        tc (float): Total Correlation.
+        dim_kl (float): Dimensionwise KL.
+    """
+   pass
+   #TODO:

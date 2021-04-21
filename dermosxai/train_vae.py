@@ -22,7 +22,7 @@ def get_hyperparams():
     #     yield {'learning_rate': lr, 'weight_decay': wd, 'augmentation': a}
 
     # test batch size with transposed
-    return [{'batch_size': 64, 'seed': 234}]
+    return [{'beta_weight': 0.3}, {'beta_weight': 1}, {'beta_weight': 3}, {'beta_weight': 10}]
 
 
 def train_all():
@@ -82,7 +82,7 @@ def train(decoder='transposed', seed=19, batch_size=64, learning_rate=0.001, wei
         'stopping_epochs': stopping_epochs, 'loss_function': loss_function,
         'beta_weight': beta_weight, 'augmentation': augmentation}
     wandb.init(project='dermosxai_vae', group='ham10K-only', config=hyperparams,
-               dir='/src/dermosxai/data', tags=['transposed_search'])
+               dir='/src/dermosxai/data', tags=['nearestneighbor'])
 
     # Set random seed
     torch.manual_seed(seed)
@@ -167,7 +167,7 @@ def train(decoder='transposed', seed=19, batch_size=64, learning_rate=0.001, wei
             # Compute loss
             nll = ((recons - images)**2).sum(dim=(1, 2, 3)).mean()
             if loss_function == 'beta-vae':
-                kl = models.gaussian_KL(*q_params).mean()
+                kl = models.gaussian_kl(*q_params).mean()
                 loss = nll + beta_weight * kl
                 wandb.log({'epoch': epoch, 'batch': batch_i, 'nll': nll.item(),
                           'kl': kl.item(), 'loss': loss.item()})
@@ -204,7 +204,7 @@ def train(decoder='transposed', seed=19, batch_size=64, learning_rate=0.001, wei
                     images = images.cuda()
                     q_params, _, recons = model(images)
                     val_nll += ((recons - images)**2).sum()
-                    val_kl += models.gaussian_KL(*q_params).sum()
+                    val_kl += models.gaussian_kl(*q_params).sum()
                 val_nll = val_nll.sum() / len(val_dset)
                 val_kl = val_kl.sum() / len(val_dset)
                 val_loss = val_nll + beta_weight * val_kl
