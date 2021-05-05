@@ -23,20 +23,15 @@ class IAD(pt_data.Dataset):
             study is selected. If False, unravel all images into a single array.
         return_attributes (bool): Whether attributes should be returned along with images
             and labels
-        normalize_attributes (bool): Whether to normalize any non-binary attribute using
-            the training stats (no overhead). Values used for this normalization can be 
-            accessed as train_attr_mean and train_attr_std.
     
     Returns:
         image (np.array): A 3-d np.uint8 array (150 x 200 x 3).
         label (int64): A single digit in [0, 3]
         (optionally) attrs (np.array): Array with attribute variables. Name of the 
-            returned variables can be accessed as dset.attribute_names; whether each 
-            attribute is a binary dummy variable can be accessed as 
-            dset.is_attribute_binary
+            returned variables can be accessed as dset.attribute_names
     """
     def __init__(self, split='train', transform=None, one_image_per_lesion=True,
-                 return_attributes=False, normalize_attributes=True):
+                 return_attributes=False):
         # Load data
         images, labels = data.get_IAD()
 
@@ -69,30 +64,16 @@ class IAD(pt_data.Dataset):
         self.return_attributes = return_attributes
         if return_attributes:
             # Get attributes
-            attributes, self.attribute_names, self.is_attribute_binary = data.get_IAD_attributes()
+            attributes, self.attribute_names = data.get_IAD_attributes()
 
             # Split attributes
             self.attributes = attributes[split_slice]
+
+            # Deal with each lesion having a diff number of images.
             if not one_image_per_lesion:
                 num_images_per_lesion = [len(lesion) for lesion in images[split_slice]]
                 self.attributes = np.repeat(self.attributes, num_images_per_lesion,
                                             axis=0)
-
-            # Normalize
-            if normalize_attributes:            
-                # Compute training stats
-                train_attributes = attributes[train_slice]
-                if not one_image_per_lesion:
-                    num_images_per_lesion = [len(lesion) for lesion in images[train_slice]]
-                    train_attributes = np.repeat(train_attributes, num_images_per_lesion,
-                                                axis=0)
-                self.train_attr_mean = train_attributes.mean(axis=0)
-                self.train_attr_std = train_attributes.std(axis=0)
-                
-                # Normalize
-                norm_attributes = ((self.attributes - self.train_attr_mean) /
-                                   self.train_attr_std)[:, ~self.is_attribute_binary]
-                self.attributes[:, ~self.is_attribute_binary] = norm_attributes
 
         # Save transform
         self.transform = transform

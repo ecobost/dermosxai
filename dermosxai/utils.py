@@ -118,7 +118,20 @@ def to_npy(torch_im, img_mean=0, img_std=1):
     """
     if torch_im.ndim < 3:
         raise ValueError('Only works for images with at least one channel (>= 3-d).')
-    
+
     im = np.moveaxis(torch_im.detach().cpu().numpy(), -3, -1)
     im = (im * img_std + img_mean)
     return im
+
+
+def binarize_categorical(categorical):
+    """ One-hot encode a categorical variable with values [0, n) as n binary variables.
+    
+    Arguments:
+        categorical (np.array): A 1-d int array with the categorical variables (0-n).
+    
+    Returns
+        binary (np.array): A 2-d boolean array (num_variables x n) with the encoded 
+            variables.
+    """
+    return np.eye(categorical.max() + 1)[categorical]

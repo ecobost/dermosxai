@@ -93,52 +93,30 @@ def get_HAM10000():
 
 
 def get_IAD_attributes(attribute_names=[
-    'global_pattern', 'diameter', 'dots_globules', 'elevation', 'gray_blue_areas',
+    'global_pattern', 'dots_globules', 'elevation', 'gray_blue_areas',
     'hypopigmentations', 'pigment_network', 'pigmentation', 'regression_c', 'streaks',
-    'vascular_pattern'], make_dummy=[1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1], ref_values=[
-        'unspecific', 'absent', 'flat', 'absent', 'absent', 'absent', 'absent', 'absent',
-        'absent', 'absent']):
-    """ Return the image-derived attributes from the IAD dataset. Same order as the images 
-    (and labels) returned by get_IAD()
+    'vascular_pattern']):
+    """ Return the image-derived attributes from the IAD dataset. 
+    
+    Patients are ordered in the same way as the images (and labels) returned by get_IAD().
+    Each attribute is encoded as an integer in the [0, n) range (where n is the number of 
+    possible values for that attribue).
+    
+    With the default attributes, we ignore attributes {'management', 'certainty', 
+    'other_criteria', 'location', 'sex', 'age', 'diameter'} because they are not 
+    image-derived. We don't use 'note' either because it is text and only defined for ~200
+    out of the 700 patients.
     
     Arguments:
         attribute_names (list of strings): Names of the attributes to read from the csv.
-        make_dummy (sequence of bools): Whether to represent each of the returned 
-            attributes as a set of dummy variables (used for categorical variables).
-        ref_values (list of strings): Which attribute value to use as the reference value 
-            when dummy coding the categorical variables (see notes for details)
         
     Returns:
-        attributes (np.array): An array (num_patients x num_attributes) with all of the 
-            attributes.
-        attribute_names (list of str): Names of the returned attributes as 
-            `attribute_name#attribute_value` so we can map back to each value.
-        is_binary (boolean array): Whether the attribute is binary.
-        
-    Note:
-        We represent categorical variables using a one-hot encoding method where a 
-        variable with k values is represented as k-1 binary variables representing the 
-        presence or absence of each of k-1 variables and a reference level of all zeros 
-        represents the remaining attribute.
-        
-        Some attributes like pigment_network have values [absent, typical, atypical] that 
-        could have been coded as ordinal rather than nominal categorical variables. I 
-        chose not to because it is not fully clear that atypical > typical (and if so, by 
-        how much) so I could encode them as continuous variables or that atypical is a 
-        superset of typical so they could be encoded as 00 (absent), 10 (typical) and 
-        11 (atypical).
-        
-        With the default attributes, we ignore attributes {'management', 'certainty', 
-        'other_criteria', 'location', 'sex', 'age'} because they are not image-derived. 
-        We don't use 'note' either because it is text and only defined for ~200 out of the 
-        700 patients.
+        attributes (np.array): An int8 array (num_patients x num_attributes) with all of 
+            the attributes.
+        value_names (list of lists of str): For each attribute, a list with the names of 
+            each encoded value as `attribute_name#attribute_value` so we can map back the
+            encoded number to the attribute value.
     """
-    # Basic checks
-    if len(attribute_names) != len(make_dummy):
-        raise ValueError('attributes and make_dummy should have the same length.')
-    if len(ref_values) != sum(make_dummy):
-        raise ValueError('Need to provide a ref_value for all categorical variables.')
-
     # Load attributes
     attrs = pd.read_csv(path.join(IAD_dir, 'lesion_info.csv'))
     attributes = attrs[attribute_names]
@@ -147,15 +125,18 @@ def get_IAD_attributes(attribute_names=[
     labels = np.array([IAD_diagnosis2id[d] for d in attrs['diagnosis']])
     attributes = attributes[labels != -1]
 
-    # Code attributes as dummy variables
-    nominal_attributes = [a for a, d in zip(attribute_names, make_dummy) if d]
-    for column_name, ref_value in zip(nominal_attributes, ref_values):
-        attributes = pd.get_dummies(attributes, columns=[column_name], prefix_sep='#')
-        attributes = attributes.drop(f'{column_name}#{ref_value}', axis='columns')
+    # Encode categorical variables as integers
+    if not all(attributes.dtypes == 'object'):
+        # TODO: Rewrite this to also deal with non-categorical attributes? (if needed)
+        # Return a list with the type of each attr. e.g. categorical vs int vs booolean
+        raise ValueError('This function only supports categorical values')
+    attributes = attributes.astype('category')
+    value_names = []
+    for attr_name in attribute_names:
+        value_names.append([f'{attr_name}#{v}' for v in attributes[attr_name].cat.categories])
+        attributes[attr_name] = attributes[attr_name].cat.codes
 
     # Transform to numpy
-    attribute_names = attributes.columns.to_list()
-    is_binary = np.array([('#' in n) for n in attribute_names])
     attributes = attributes.to_numpy()
 
-    return attributes, attribute_names, is_binary
+    return attributes, value_names
