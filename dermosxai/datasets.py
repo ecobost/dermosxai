@@ -19,7 +19,7 @@ class IAD(pt_data.Dataset):
         transform (callable): Transform operation: receives an RGB image and returns the 
             transformed image.
         one_image_per_lesion (bool): Whether only one image should be selected for each 
-            lesion (they are usually diff images of the same lesion); first image in the 
+            lesion (there are usually diff images of the same lesion); first image in the 
             study is selected. If False, unravel all images into a single array.
         return_attributes (bool): Whether attributes should be returned along with images
             and labels
