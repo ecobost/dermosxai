@@ -1,6 +1,7 @@
 """ Some basic utility functions. """
 import numpy as np
 import time
+from sklearn import metrics
 
 
 
@@ -135,3 +136,64 @@ def binarize_categorical(categorical):
             variables.
     """
     return np.eye(categorical.max() + 1)[categorical]
+
+
+def compute_metrics(probs, targets, average='macro'):
+    """Computes a set of classification metrics.
+    
+    Arguments:
+        probs (np.array): A num_samples x num_classes array with the predicted 
+            probabilities per class.
+        targets (np.array): A num_samples array with the correct target classes 
+            (in [0, n) range).
+        average (None, 'micro', or 'macro'): How to average F1, AUC and AP:
+            None: Returns an array with the per-class metrics.
+            micro: Computes a global confusion matrix and computes the metrics.
+            macro: Computes the metrics per class and averages.
+            
+    Returns
+        accuracy (float): Classification accuracy.
+        kappa (float): Cohen's kappa score.
+        mcc (float): Matthews' correlation coefficient.
+        f1 (array): F1 score.
+        auc (array): Area under the ROC curve.
+        ap (array): Average precision per class/Area under the PR curve.
+    
+    Note: 
+        Cohen's kappa measures how much better (or worse) the classifier does than one 
+        that predicts classes at random but with the same proportions. And normalizes this 
+        value by the maximum possible difference: (acc - acc_random) / (1-acc_random) to 
+        keep numbers in [-1, 1] range.
+                
+        Matthew's correlation coefficient (for binary cases) essentially computes the 
+        correlation between the vector of predictions and the ground-truth vector.
+     
+        According to [1], MCC and Kappa return the same number if the confusion matrix is 
+        symmetric but kappa gives counter-intuitive results when the distribution of the 
+        off-diagonals has high entropy. According to [2], MCC is more informative and 
+        truthful than accuracy and F1 and kappa has too many problems to even be 
+        considered.
+        
+        [2] also says average precision (the area under the precision-recall curve) should 
+        be preferred to AUC for imbalanced datasets.
+        
+        Conclusion: Use MCC or average precision. Or accuracy if not afraid of unbalance.
+        
+        [1] Delgado R, Tibau X-A (2019) Why Cohen’s Kappa should be avoided as performance
+        measure in classification. PLoS ONE 14(9): e0222916.
+        
+        [2] Chicco, D., Jurman, G. The advantages of the Matthews correlation coefficient 
+        (MCC) over F1 score and accuracy in binary classification evaluation. BMC Genomics 
+        21, 6 (2020).
+    """
+    pred_labels = np.argmax(probs, -1)
+    accuracy = metrics.accuracy_score(targets, pred_labels)
+    kappa = metrics.cohen_kappa_score(targets, pred_labels)
+    mcc = metrics.matthews_corrcoef(targets, pred_labels)
+    f1 = metrics.f1_score(targets, pred_labels, average=average)
+    auc = metrics.roc_auc_score(binarize_categorical(targets), probs, multi_class='ovr',
+                                 average=average)
+    ap = metrics.average_precision_score(binarize_categorical(targets), probs,
+                                          average=average)
+
+    return accuracy, kappa, mcc, f1, auc, ap
