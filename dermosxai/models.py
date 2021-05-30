@@ -349,9 +349,10 @@ class VAE(nn.Module):
 
 
 
-
-
 #TODO: Maybe move this functions to a diff dist_utils.py (where I can also put other sampling stuff)
+import math
+
+
 def gaussian_sample(mu, sigma):
     """ Sample a gaussian variable using the reparametrization trick.
     
@@ -402,18 +403,39 @@ def approx_kl(p, q, z):
     kl = (q.log_prob(z) - p.log_prob(z)).sum(axis=-1)
     return kl
 
-def kl_tc_decomposition(z):
-    """ Returns the ELBO decomposition from Chen et al. 2018.
+
+def gaussian_tc(mu, logsigma, dset_size=1):
+    """Compute the TC term KL(q(z) || prod_i q(z_i)) using minibatch-weighted sampling.
+    
+    Reduces to 1/M sum_i^M log(sum_j^M q(z^(i) | x_j)) - log(NM) where z^(i) ~ q(z|x_i)
     
     Arguments:
-        mu 
-        logsigma
-        z (torch.FloatTensor): Samples (N x num_variables).
+        mu (torch.Tensor): Mean. Expected size (N x num_variables)
+        logsigma (torch.Tensor): Natural logarithm of the standard deviation. Same size 
+            as mean.
+        dset_size (int): Number of examples in the dset.
         
     Returns:
-        ic (float): Index Code Mutual Information.
-        tc (float): Total Correlation.
-        dim_kl (float): Dimensionwise KL.
+        tc(float): Total correlation. Differentiable.
+        
+    Note: 
+        Assumes q(z_i|x) is independent of q(z_j|x) for all i, j.
     """
-   pass
-   #TODO:
+    sigma = torch.exp(logsigma)
+
+    # Sample z (one per example)
+    z = gaussian_sample(mu, sigma) #if self.sample_z else mu
+
+    # Compute cross-probabilities q(z^(i)|x_j) (i, j are rows and columns)
+    norm_constant = sigma * math.sqrt(2 * math.pi)
+    exp = torch.exp(-0.5 * ((z[:, None] - mu) / sigma)**2)
+    xprob = exp / norm_constant
+
+    # Estimate logq(z)
+    logqz = torch.log(xprob.prod(-1).sum(1)).mean(0) - math.log(dset_size * len(z))
+    logqz_i = torch.log(xprob.sum(1)).mean(0) - math.log(dset_size * len(z))
+
+    # Calculate total correlation
+    tc = logqz - logqz_i.sum()
+
+    return tc
