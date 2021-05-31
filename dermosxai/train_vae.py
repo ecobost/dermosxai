@@ -63,7 +63,7 @@ def train(decoder='transposed', seed=19, batch_size=64, learning_rate=0.001, wei
         lr_decay (float): Factor multiplying learning rate when decaying.
         stopping_epochs (int): Early stop training after this number of epochs without an 
             improvement in validation mse.
-        loss_function (str): Loss function to optimize. One of "beta-vae" or "tcvae".
+        loss_function (str): Loss function to optimize. One of "beta-vae" or "tc-vae".
         beta_weight (float): Weight for the disentanglement term of the loss (KL or TC 
             depending on the type).
         augmentation (str): How to augment the training images. One of 'flips' or 'full'.
@@ -144,6 +144,7 @@ def train(decoder='transposed', seed=19, batch_size=64, learning_rate=0.001, wei
     best_epoch = 0
     best_nll = float('inf')
     best_kl = float('inf') # kl at the best epoch as chosen with MSE
+    best_tc = float('inf') # tc at the best epoch as chosen with MSE
 
     # Train
     start_time = time.time()  # in seconds
@@ -166,20 +167,22 @@ def train(decoder='transposed', seed=19, batch_size=64, learning_rate=0.001, wei
 
             # Compute loss
             nll = ((recons - images)**2).sum(dim=(1, 2, 3)).mean()
+            kl = models.gaussian_kl(*q_params).mean()
+            tc = models.gaussian_tc(*q_params)  #if loss_function == 'tc-vae' else -1
             if loss_function == 'beta-vae':
-                kl = models.gaussian_kl(*q_params).mean()
                 loss = nll + beta_weight * kl
-                wandb.log({'epoch': epoch, 'batch': batch_i, 'nll': nll.item(),
-                          'kl': kl.item(), 'loss': loss.item()})
-
-                if batch_i % 10 == 0:
-                    utils.tprint(f'Training loss {loss.item():.0f}',
-                                 f'(MSE: {nll.item():.0f}, KL: {kl.item():.0f})')
-            elif loss_function == 'tcvae':
-                #TODO: Maybe refactor to a _compute_loss() function
-                raise NotImplementedError("this ain't it chief")
+            elif loss_function == 'tc-vae':
+                loss = nll + kl + (beta_weight - 1) * tc
             else:
                 raise ValueError(f'Loss function {loss_function} is not a valid option.')
+
+            # Log loss
+            wandb.log({
+                'epoch': epoch, 'batch': batch_i, 'nll': nll.item(), 'kl': kl.item(),
+                'tc': tc.item(), 'loss': loss.item()})
+            if batch_i % 10 == 0:
+                utils.tprint(f'Training loss {loss.item():.0f} (MSE: {nll.item():.0f}, ',
+                             f'KL: {kl.item():.0f}, TC: {tc.item():.1f})')
 
             # Check for divergence
             if torch.isnan(loss) or torch.isinf(loss):
@@ -187,6 +190,7 @@ def train(decoder='transposed', seed=19, batch_size=64, learning_rate=0.001, wei
                 wandb.run.summary['best_epoch'] = best_epoch
                 wandb.run.summary['best_val_nll'] = best_nll
                 wandb.run.summary['best_val_kl'] = best_kl
+                wandb.run.summary['best_val_tc'] = best_tc
                 wandb.run.finish()
                 raise ValueError('Training loss diverged')
 
@@ -197,26 +201,34 @@ def train(decoder='transposed', seed=19, batch_size=64, learning_rate=0.001, wei
         # Compute loss on validation set
         model.eval()
         with torch.no_grad():
-            if loss_function == 'beta-vae':
-                val_nll = 0
-                val_kl = 0
-                for images, _ in val_dloader:
-                    images = images.cuda()
-                    q_params, _, recons = model(images)
-                    val_nll += ((recons - images)**2).sum()
-                    val_kl += models.gaussian_kl(*q_params).sum()
-                val_nll = val_nll.sum() / len(val_dset)
-                val_kl = val_kl.sum() / len(val_dset)
-                val_loss = val_nll + beta_weight * val_kl
+            val_nll = 0
+            val_kl = 0
+            val_qparams = []
+            for images, _ in val_dloader:
+                images = images.cuda()
+                q_params, _, recons = model(images)
+                val_qparams.append(q_params)
+                val_nll += ((recons - images)**2).sum()
+                val_kl += models.gaussian_kl(*q_params).sum()
+            val_nll = val_nll.sum() / len(val_dset)
+            val_kl = val_kl.sum() / len(val_dset)
+            val_qparams = [torch.cat(qp) for qp in zip(*val_qparams)]
+            val_tc = models.gaussian_tc(*val_qparams)
 
-                wandb.log({'epoch': epoch, 'val_nll': val_nll.item(),
-                          'val_kl': val_kl.item(), 'val_loss': val_loss.item()})
-                utils.tprint(f'Validation loss {val_loss.item():.0f}',
-                             f'(MSE: {val_nll.item():.0f}, KL: {val_kl.item():.0f})')
-            elif loss_function == 'tcvae':
-                raise NotImplementedError("not yet")
+            if loss_function == 'beta-vae':
+                val_loss = val_nll + beta_weight * val_kl
+            elif loss_function == 'tc-vae':
+                val_loss = val_nll + val_kl + (beta_weight - 1) * val_tc
             else:
                 raise ValueError(f'Loss function {loss_function} is not a valid option.')
+
+            wandb.log({
+                'epoch': epoch, 'val_nll': val_nll.item(), 'val_kl': val_kl.item(),
+                'val_tc': val_tc.item(), 'val_loss': val_loss.item()})
+            utils.tprint(
+                f'Validation loss {val_loss.item():.0f}',
+                f'(MSE: {val_nll.item():.0f}, KL: {val_kl.item():.0f}), TC: {val_tc.item():.1f})'
+            )
         model.train()
 
         # Check for divergence
@@ -225,6 +237,7 @@ def train(decoder='transposed', seed=19, batch_size=64, learning_rate=0.001, wei
             wandb.run.summary['best_epoch'] = best_epoch
             wandb.run.summary['best_val_nll'] = best_nll
             wandb.run.summary['best_val_kl'] = best_kl
+            wandb.run.summary['best_val_tc'] = best_tc
             wandb.run.finish()
             raise ValueError('Validation loss diverged')
 
@@ -237,6 +250,7 @@ def train(decoder='transposed', seed=19, batch_size=64, learning_rate=0.001, wei
             best_epoch = epoch
             best_nll = val_nll.item()
             best_kl = val_kl.item()
+            best_tc = val_tc.item()
             best_model = copy.deepcopy(model).cpu()
 
         # Stop training if validation has not improved in x number of epochs
@@ -254,6 +268,7 @@ def train(decoder='transposed', seed=19, batch_size=64, learning_rate=0.001, wei
     wandb.run.summary['best_epoch'] = best_epoch
     wandb.run.summary['best_val_nll'] = best_nll
     wandb.run.summary['best_val_kl'] = best_kl
+    wandb.run.summary['best_val_tc'] = best_tc
 
     # Save model
     wandb.save('model.pt')
