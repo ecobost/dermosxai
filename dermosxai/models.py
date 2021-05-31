@@ -413,7 +413,8 @@ def gaussian_tc(mu, logsigma, dset_size=1):
         mu (torch.Tensor): Mean. Expected size (N x num_variables)
         logsigma (torch.Tensor): Natural logarithm of the standard deviation. Same size 
             as mean.
-        dset_size (int): Number of examples in the dset.
+        dset_size (int): Number of examples in the dset. Use 1 to avoid the dset_size 
+            having an effect in the tc estimation (batch size ofc still matters).
         
     Returns:
         tc(float): Total correlation. Differentiable.
@@ -426,16 +427,33 @@ def gaussian_tc(mu, logsigma, dset_size=1):
     # Sample z (one per example)
     z = gaussian_sample(mu, sigma) #if self.sample_z else mu
 
-    # Compute cross-probabilities q(z^(i)|x_j) (i, j are rows and columns)
-    norm_constant = sigma * math.sqrt(2 * math.pi)
-    exp = torch.exp(-0.5 * ((z[:, None] - mu) / sigma)**2)
-    xprob = exp / norm_constant
+    # Compute log cross-probabilities logq(z^(i)|x_j) (i, j are rows and columns)
+    lognorm_cons = torch.log(sigma) + 0.5 * math.log(2 * math.pi)
+    logxprob = -lognorm_cons - 0.5 * ((z[:, None] - mu) / sigma)**2
 
     # Estimate logq(z)
-    logqz = torch.log(xprob.prod(-1).sum(1)).mean(0) - math.log(dset_size * len(z))
-    logqz_i = torch.log(xprob.sum(1)).mean(0) - math.log(dset_size * len(z))
+    logqz = logsumexp(logxprob.sum(-1), dim=1).mean(0) - math.log(dset_size * len(z))
+    logqz_i = logsumexp(logxprob, dim=1).mean(0) - math.log(dset_size * len(z))
 
     # Calculate total correlation
     tc = logqz - logqz_i.sum()
 
     return tc
+
+
+def logsumexp(values, dim=None, keepdim=False):
+    """Numerically stable implementation of the operation 
+    values.exp().sum(dim, keepdim).log()
+    
+    Modified from https://github.com/rtqichen/beta-tcvae/blob/master/elbo_decomposition.py
+    """
+    if dim is None:
+        m = torch.max(values)
+        logsumexp = m + torch.log(torch.sum(torch.exp(values - m)))
+    else:
+        m, _ = torch.max(values, dim=dim, keepdim=True)
+        value0 = values - m
+        if keepdim is False:
+            m = m.squeeze(dim)
+        logsumexp = m + torch.log(torch.sum(torch.exp(value0), dim=dim, keepdim=keepdim))
+    return logsumexp
