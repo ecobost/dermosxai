@@ -295,7 +295,7 @@ class VAE(nn.Module):
         """
         # Resizing image to 128 x 128
         self.original_dims = x.shape[2:] # used for resizing
-        resized_x = F.interpolate(x, (128, 128))#, mode='bilinear', align_corners=False)
+        resized_x = F.interpolate(x, (128, 128)) #, mode='bilinear', align_corners=False)
 
         # Encode image into u, sigma for gaussian q distribution
         q_params = self.encoder(resized_x)
@@ -428,7 +428,7 @@ def gaussian_tc(mu, logsigma, dset_size=1):
     z = gaussian_sample(mu, sigma) #if self.sample_z else mu
 
     # Compute log cross-probabilities logq(z^(i)|x_j) (i, j are rows and columns)
-    lognorm_cons = torch.log(sigma) + 0.5 * math.log(2 * math.pi)
+    lognorm_cons = logsigma + 0.5 * math.log(2 * math.pi)
     logxprob = -lognorm_cons - 0.5 * ((z[:, None] - mu) / sigma)**2
 
     # Estimate logq(z)
