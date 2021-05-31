@@ -404,7 +404,7 @@ def approx_kl(p, q, z):
     return kl
 
 
-def gaussian_tc(mu, logsigma, dset_size=1):
+def gaussian_tc(mu, logsigma, dset_size=1, eps=1e-9):
     """Compute the TC term KL(q(z) || prod_i q(z_i)) using minibatch-weighted sampling.
     
     Reduces to 1/M sum_i^M log(sum_j^M q(z^(i) | x_j)) - log(NM) where z^(i) ~ q(z|x_i)
@@ -415,6 +415,7 @@ def gaussian_tc(mu, logsigma, dset_size=1):
             as mean.
         dset_size (int): Number of examples in the dset. Use 1 to avoid the dset_size 
             having an effect in the tc estimation (batch size ofc still matters).
+        eps (float): Small number to avoid division by zero.
         
     Returns:
         tc(float): Total correlation. Differentiable.
@@ -429,7 +430,7 @@ def gaussian_tc(mu, logsigma, dset_size=1):
 
     # Compute log cross-probabilities logq(z^(i)|x_j) (i, j are rows and columns)
     lognorm_cons = logsigma + 0.5 * math.log(2 * math.pi)
-    logxprob = -lognorm_cons - 0.5 * ((z[:, None] - mu) / sigma)**2
+    logxprob = -lognorm_cons - 0.5 * ((z[:, None] - mu) / (sigma + eps))**2
 
     # Estimate logq(z)
     logqz = logsumexp(logxprob.sum(-1), dim=1).mean(0) - math.log(dset_size * len(z))
