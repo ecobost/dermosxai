@@ -387,23 +387,6 @@ def gaussian_kl(mu, logsigma):
     return kl
 
 
-#TODO: Actually implement this if needed (i.e., if TCVAE is not better than beta-VAE)
-def approx_kl(p, q, z):
-    """ Compute a MonteCarlo approximation of the KL(q|p): 1/n * (log(q(z)) - log(p(z))) 
-    
-    Arguments:
-        p (torch.distributions): The distribution of the prior p(z).
-        q (torch.distributions): The distribution of q(z|x) distribution.
-        z (torch.Tensor): Samples from q (N x num_variables). 
-    
-    Returns:
-        kl (torch.Tensor): KL divergence estimate.
-    """
-    raise NotImplementedError('Test and make sure this is alright!')
-    kl = (q.log_prob(z) - p.log_prob(z)).sum(axis=-1)
-    return kl
-
-
 def gaussian_tc(mu, logsigma, dset_size=1, eps=1e-9):
     """Compute the TC term KL(q(z) || prod_i q(z_i)) using minibatch-weighted sampling.
     
@@ -433,28 +416,10 @@ def gaussian_tc(mu, logsigma, dset_size=1, eps=1e-9):
     logxprob = -lognorm_cons - 0.5 * ((z[:, None] - mu) / (sigma + eps))**2
 
     # Estimate logq(z)
-    logqz = logsumexp(logxprob.sum(-1), dim=1).mean(0) - math.log(dset_size * len(z))
-    logqz_i = logsumexp(logxprob, dim=1).mean(0) - math.log(dset_size * len(z))
+    logqz = torch.logsumexp(logxprob.sum(-1), dim=1).mean(0) - math.log(dset_size * len(z))
+    logqz_i = torch.logsumexp(logxprob, dim=1).mean(0) - math.log(dset_size * len(z))
 
     # Calculate total correlation
     tc = logqz - logqz_i.sum()
 
     return tc
-
-
-def logsumexp(values, dim=None, keepdim=False):
-    """Numerically stable implementation of the operation 
-    values.exp().sum(dim, keepdim).log()
-    
-    Modified from https://github.com/rtqichen/beta-tcvae/blob/master/elbo_decomposition.py
-    """
-    if dim is None:
-        m = torch.max(values)
-        logsumexp = m + torch.log(torch.sum(torch.exp(values - m)))
-    else:
-        m, _ = torch.max(values, dim=dim, keepdim=True)
-        value0 = values - m
-        if keepdim is False:
-            m = m.squeeze(dim)
-        logsumexp = m + torch.log(torch.sum(torch.exp(value0), dim=dim, keepdim=keepdim))
-    return logsumexp
