@@ -22,7 +22,10 @@ def get_hyperparams():
     #     yield {'learning_rate': lr, 'weight_decay': wd, 'augmentation': a}
 
     # test batch size with transposed
-    return [{'beta_weight': 0.3}, {'beta_weight': 1}, {'beta_weight': 3}, {'beta_weight': 10}]
+    return [{'loss_function': 'tc-vae',
+             'beta_weight': 0.3}, {'loss_function': 'tc-vae', 'beta_weight': 1},
+            {'loss_function': 'tc-vae',
+             'beta_weight': 3}, {'loss_function': 'tc-vae', 'beta_weight': 10}]
 
 
 def train_all():
@@ -82,7 +85,7 @@ def train(decoder='transposed', seed=19, batch_size=64, learning_rate=0.001, wei
         'stopping_epochs': stopping_epochs, 'loss_function': loss_function,
         'beta_weight': beta_weight, 'augmentation': augmentation}
     wandb.init(project='dermosxai_vae', group='ham10K-only', config=hyperparams,
-               dir='/src/dermosxai/data', tags=['nearestneighbor'])
+               dir='/src/dermosxai/data', tags=['tcvae'])
 
     # Set random seed
     torch.manual_seed(seed)
@@ -227,7 +230,7 @@ def train(decoder='transposed', seed=19, batch_size=64, learning_rate=0.001, wei
                 'val_tc': val_tc.item(), 'val_loss': val_loss.item()})
             utils.tprint(
                 f'Validation loss {val_loss.item():.0f}',
-                f'(MSE: {val_nll.item():.0f}, KL: {val_kl.item():.0f}), TC: {val_tc.item():.1f})'
+                f'(MSE: {val_nll.item():.0f}, KL: {val_kl.item():.0f}, TC: {val_tc.item():.1f})'
             )
         model.train()
 
