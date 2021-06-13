@@ -197,3 +197,32 @@ def compute_metrics(probs, targets, average='macro'):
                                           average=average)
 
     return accuracy, kappa, mcc, f1, auc, ap
+
+
+def off_diagonal(m):
+    """Returns off-diagonal elements of a square matrix. """
+    n = m.shape[0]
+    return m.flatten()[1:].view(n - 1, n + 1)[:, :-1].flatten()#.reshape(n, n-1)
+
+
+def split_data(num_examples, split=[0.8, 0.1]):
+    """ Create the slices to split num_examples into train/val/test.
+    
+    Arguments:
+        num_examples: Total number of examples
+        split: A tuple. Proportion of examples in training and validation (Test is the 
+            rest of examples).
+            
+    Returns:
+        train_slice, val_slice, test_slice: Slice objects that can be used to indent the 
+            data arrays.
+    """
+    if sum(split) > 1:
+        raise ValueError('Splits have to be a proportion in [0, 1] and sum <= 1')
+    
+    # Create splits
+    train_slice = slice(int(round(split[0] * num_examples)))  # first 80%
+    val_slice = slice(train_slice.stop, int(round(sum(split) * num_examples)))  # 80-90%
+    test_slice = slice(val_slice.stop, None)  # 90%-100%
+    
+    return train_slice, val_slice, test_slice

@@ -3,6 +3,7 @@ from torch.utils import data as pt_data
 import numpy as np
 
 from dermosxai import data
+from dermosxai import utils
 
 class IAD(pt_data.Dataset):
     """ Interactive Atlas of Dermoscopy (IAD) dataset.
@@ -35,12 +36,8 @@ class IAD(pt_data.Dataset):
         # Load data
         images, labels = data.get_IAD()
 
-        # Set up training splits
-        train_slice = slice(int(round(0.8 * len(images))))  # first 80%
-        val_slice = slice(train_slice.stop, int(round(0.9 * len(images))))  # 80-90%
-        test_slice = slice(val_slice.stop, None)  # 90%-100%
-
         # Split data
+        train_slice, val_slice, test_slice = utils.split_data(len(images))
         if split == 'train':
             split_slice = train_slice
         elif split == 'val':
@@ -126,12 +123,8 @@ class HAM10000(pt_data.Dataset):
         # Load data
         images, labels = data.get_HAM10000()
 
-        # Set up training splits
-        train_slice = slice(int(round(0.8 * len(images))))  # first 80%
-        val_slice = slice(train_slice.stop, int(round(0.9 * len(images))))  # 80-90%
-        test_slice = slice(val_slice.stop, None)  # 90%-100%
-
         # Split data
+        train_slice, val_slice, test_slice = utils.split_data(len(images))
         if split == 'train':
             split_slice = train_slice
         elif split == 'val':
@@ -173,3 +166,44 @@ class HAM10000(pt_data.Dataset):
             example = (self.transform(example[0]), example[1])
 
         return example
+
+    
+class StackDataset(pt_data.Dataset):
+    """ Stacks datasets along the batch axis. 
+    
+    Arguments:
+        datasets: Datasets to stack.
+    """
+    def __init__(self, *datasets):
+        self.datasets = datasets
+        self.dset_lengths = [len(dset) for dset in datasets]
+    
+    def __len__(self):
+        sum(self.dset_lengths)
+    
+    def __getitem__(self, i):
+        pass
+        #TODO: Find which dset to sample from and return that
+        
+
+class ConcatDataset(pt_data.Dataset):
+    """ Concatenate datasets.
+    
+    Arguments:
+        datasets: Datasets to concatenate. They should all have the same length.
+        
+    Returns:
+        (ex1, ex2, ..., exn): A tuple with as many entries as there are datasets.
+    """
+    def __init__(self, *datasets):
+        if any([len(dset) != len(datasets[0]) for dset in datasets]):
+            raise ValueError('All datasets must have the same size.')
+        
+        self.datasets = datasets
+
+    def __len__(self):
+        return len(self.datasets[0])
+    
+    def __getitem__(self, i):
+        return tuple(d[i] for d in self.datasets)
+        
