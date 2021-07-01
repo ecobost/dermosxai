@@ -125,17 +125,21 @@ def to_npy(torch_im, img_mean=0, img_std=1):
     return im
 
 
-def binarize_categorical(categorical):
+def binarize_categorical(categorical, num_categories=None):
     """ One-hot encode a categorical variable with values [0, n) as n binary variables.
     
     Arguments:
         categorical (np.array): A 1-d int array with the categorical variables (0-n).
+        num_categories (int): Number of categories expected in the categorical variable.
+            If not provided, it is deduced from the categorical variable.
     
     Returns
         binary (np.array): A 2-d boolean array (num_variables x n) with the encoded 
             variables.
     """
-    return np.eye(categorical.max() + 1)[categorical]
+    if num_categories is None:
+        num_categories = categorical.max() + 1
+    return np.eye(num_categories)[categorical]
 
 
 def compute_metrics(probs, targets, average='macro'):
@@ -191,10 +195,15 @@ def compute_metrics(probs, targets, average='macro'):
     kappa = metrics.cohen_kappa_score(targets, pred_labels)
     mcc = metrics.matthews_corrcoef(targets, pred_labels)
     f1 = metrics.f1_score(targets, pred_labels, average=average)
-    auc = metrics.roc_auc_score(binarize_categorical(targets), probs, multi_class='ovr',
-                                 average=average)
-    ap = metrics.average_precision_score(binarize_categorical(targets), probs,
-                                          average=average)
+    binary_targets = binarize_categorical(targets, num_categories=probs.shape[-1])
+    if any(binary_targets.sum(0) == 0): 
+        # AUC and PRAUC are undefined when there is only one value for one class.
+        auc = float('nan')
+        ap = float('nan')
+    else:
+        auc = metrics.roc_auc_score(binary_targets, probs, multi_class='ovr', 
+                                    average=average)
+        ap = metrics.average_precision_score(binary_targets, probs, average=average)
 
     return accuracy, kappa, mcc, f1, auc, ap
 
@@ -219,10 +228,10 @@ def split_data(num_examples, split=[0.8, 0.1]):
     """
     if sum(split) > 1:
         raise ValueError('Splits have to be a proportion in [0, 1] and sum <= 1')
-    
+
     # Create splits
     train_slice = slice(int(round(split[0] * num_examples)))  # first 80%
     val_slice = slice(train_slice.stop, int(round(sum(split) * num_examples)))  # 80-90%
     test_slice = slice(val_slice.stop, None)  # 90%-100%
-    
+
     return train_slice, val_slice, test_slice
