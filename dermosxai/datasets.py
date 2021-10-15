@@ -62,6 +62,7 @@ class IAD(pt_data.Dataset):
         if return_attributes:
             # Get attributes
             attributes, self.attribute_names = data.get_IAD_attributes()
+            attributes = attributes.astype(np.int64)
 
             # Split attributes
             self.attributes = attributes[split_slice]
@@ -182,7 +183,7 @@ class StackDataset(pt_data.Dataset):
         sum(self.dset_lengths)
     
     def __getitem__(self, i):
-        pass
+        raise NotImplementedError
         #TODO: Find which dset to sample from and return that
         
 
