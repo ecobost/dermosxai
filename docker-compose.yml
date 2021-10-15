@@ -8,6 +8,8 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix # for X-forwarding
       - /tmp:/tmp
       - .:/src/dermosxai
+#      - /media/ecobos/Mike/manifest-ZkhPvrLo5216730872708713142/CBIS-DDSM:/mammograms
+#      - /media/ecobos/Mike/manifest-1622561851074/NSCLC%20Radiogenomics:/lung_cts
     environment:
       - DISPLAY=$DISPLAY
     entrypoint:
