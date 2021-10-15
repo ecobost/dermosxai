@@ -9,6 +9,7 @@ import pandas as pd
 base_dir = '/src/dermosxai/data'
 IAD_dir = path.join(base_dir, 'IAD')
 HAM_dir = path.join(base_dir, 'HAM10000')
+DDSM_dir = path.join(base_dir, 'DDSM')
 
 # Map dataset diagnoses to label ids
 HAM_diagnosis2id = {
@@ -140,3 +141,107 @@ def get_IAD_attributes(attribute_names=[
     attributes = attributes.to_numpy()
 
     return attributes, value_names
+
+
+#########################################################################################
+# CBIS-DDSM
+
+# Maps 'mass shape' values to a shape id
+shape2id = {
+    'architectural_distortion': -1,
+    'asymmetric_breast_tissue': -1,
+    'focal_asymmetric_density': -1,
+    'irregular': 1,
+    'irregular/architectural_distortion': -1,
+    'irregular/asymmetric_breast_tissue': -1,
+    'irregular/focal_asymmetric_density': -1,
+    'lobulated': 2,
+    'lobulated/architectural_distortion': -1,
+    'lobulated/irregular': -1,
+    'lobulated/lymph_node': -1,
+    'lobulated/oval': -1,
+    'lymph_node': -1,
+    'oval': 0,
+    'oval/lobulated': -1,
+    'oval/lymph_node': -1,
+    'round': 0,
+    'round/irregular/architectural_distortion': -1,
+    'round/lobulated': -1,
+    'round/oval': 0, }
+
+id2shape = {0: 'Oval', 1: 'Irregular', 2: 'Lobulated', -1: 'ignored'}
+
+# Maps 'mass margins' values to an id
+margins2id = {
+    'circumscribed': 0,
+    'circumscribed/ill_defined': -1,
+    'circumscribed/microlobulated': -1,
+    'circumscribed/microlobulated/ill_defined': -1,
+    'circumscribed/obscured': -1,
+    'circumscribed/obscured/ill_defined': -1,
+    'circumscribed/spiculated': -1,
+    'ill_defined': 1,
+    'ill_defined/spiculated': -1,
+    'microlobulated': 4,
+    'microlobulated/ill_defined': -1,
+    'microlobulated/ill_defined/spiculated': -1,
+    'microlobulated/spiculated': -1,
+    'obscured': 3,
+    'obscured/circumscribed': -1,
+    'obscured/ill_defined': -1,
+    'obscured/ill_defined/spiculated': -1,
+    'obscured/spiculated': -1,
+    'spiculated': 2,
+    }
+
+id2magins = {
+    0: 'Circumscribed', 1: 'Ill defined', 2: 'Spiculated', 3: 'Obscured',
+    4: 'Microlobulated', -1: 'ignored'}
+
+
+# Maps pathology to diagnosis
+DDSM_diagnosis2id = {
+    'benign': False,
+    'benign_without_callback': False,
+    'malignant': True,
+}
+
+
+def get_DDSM():
+    """ Load and return images, labels and attributes for the DDSM dataset.
+    
+    Returns:
+        images (dict): Dictionary with 'train', 'val' and 'test' keys. Each maps to a 
+            num_examples x height x width np.float32 array with the images.
+        labels (dict): Dictionary with 'train', 'val' and 'test' keys. Each maps to a 
+            num_examples boolean array with the labels for each image. 0: Benign, 
+            1: Malignant.
+        attributes (dict): Dictionary with 'train', 'val' and 'test' keys. Each maps to a 
+            num_examples x 2 int8 array with the shape and margin of the mass. See 
+            id2shape and id2margins to map these values to their names.
+    """
+    # Load images
+    with h5py.File(path.join(DDSM_dir, 'images.h5'), 'r') as f:
+        images = np.array(f['images'], dtype=np.float32)
+
+    # Load csv
+    df = pd.read_csv(path.join(DDSM_dir, 'image_info.csv'))
+
+    # Encode attributes (and labels) as integers
+    df['mass_shape'] = [shape2id[s] for s in df['mass_shape']]
+    df['mass_margins'] = [margins2id[m] for m in df['mass_margins']]
+    df['pathology'] = [DDSM_diagnosis2id[p] for p in df['pathology']]
+
+    # Restrict data to examples with valid mass_shape and mass_margins
+    images = images[(df['mass_shape'] != -1) & (df['mass_margins'] != -1)]
+    df = df[(df['mass_shape'] != -1) & (df['mass_margins'] != -1)]
+
+    # Split datasets
+    splits = ['train', 'val', 'test']
+    images = {s: images[df['split'] == s] for s in splits}
+    labels = {s: np.array(df['pathology'][df['split'] == s], dtype=bool) for s in splits}
+    attributes = {
+        s: np.array(df[['mass_shape', 'mass_margins']][df['split'] == s], dtype=np.int8)
+        for s in splits}
+
+    return images, labels, attributes
