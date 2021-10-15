@@ -131,7 +131,7 @@ def train_mi(train_x, train_y, val_x, val_y, mi_version='mine', batch_size=96, s
     
     Arguments:
         train_x, train_y (torch.tensor): Training sets. Each is a (N x num_features) array, 
-            where N should match and num_features can be different betwee x and y.
+            where N should match and num_features can be different between x and y.
         val_x, val_y (np.array): Validation sets. Used for early stopping.
         mi_version (string): Which MI method to use:
             'mine': Optimizes the Donsker-Varadhan bound of the MI as done for MINE.
@@ -152,7 +152,7 @@ def train_mi(train_x, train_y, val_x, val_y, mi_version='mine', batch_size=96, s
     Returns:
         best_model (MIEstimator): Best Mi estimator.
         vds, vd_losses, jsds, infonces: Training MI estimates. 
-        val_vds, val_vd_losses, val_jsds, val_infonces: Training MI estimates.
+        val_vds, val_vd_losses, val_jsds, val_infonces: MI estimates on validation set.
 
     Note: 
         This method uses the data as is. Make sure to normalize it before sending it here.
@@ -181,7 +181,8 @@ def train_mi(train_x, train_y, val_x, val_y, mi_version='mine', batch_size=96, s
     model.cuda()
 
     # Declare optimizer
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate,
+                           weight_decay=weight_decay)
 
     scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, factor=lr_decay, mode='max',
                                                patience=decay_epochs)
