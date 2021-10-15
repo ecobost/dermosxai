@@ -75,6 +75,7 @@ def create_IAD_dsets():
     # Load data
     train_dset = datasets.IAD('train')
     val_dset = datasets.IAD('val')
+    test_dset = datasets.IAD('test')
 
     # Add transforms
     img_mean, img_std = train_dset.img_mean, train_dset.img_std
@@ -83,11 +84,13 @@ def create_IAD_dsets():
         transforms.Normalize(img_mean / 255, img_std / 255)])
     train_dset.transform = transform
     val_dset.transform = transform
+    test_dset.transform = transform
 
     # Create dloaders
     batch_size = 256
     train_dloader = data.DataLoader(train_dset, batch_size=batch_size, num_workers=4)
     val_dloader = data.DataLoader(val_dset, batch_size=batch_size, num_workers=4)
+    test_dloader = data.DataLoader(val_dset, batch_size=batch_size, num_workers=4)
 
     # Load resnet
     resnet = models.resnet50(pretrained=True)
@@ -95,7 +98,7 @@ def create_IAD_dsets():
     resnet.eval()
 
     # Get features
-    for dloader, name in [(train_dloader, 'train'), (val_dloader, 'val')]:
+    for dloader, name in [(train_dloader, 'train'), (val_dloader, 'val'), (test_dloader, 'test')]:
         all_feats = []
         with torch.no_grad():
             for images, _ in dloader:
@@ -105,5 +108,46 @@ def create_IAD_dsets():
         all_feats = [np.concatenate(fs) for fs in zip(*all_feats)]
 
         with h5py.File(f'/src/dermosxai/data/IAD/resnet/{name}_features.h5', 'w') as f:
+            for idx, arr in enumerate(all_feats):
+                f.create_dataset(str(idx), data=arr)
+                
+def create_HAM_dsets():
+    """Extracts the ResNet intermediate representations and creates the h5 dsets."""
+    # Load data
+    train_dset = datasets.HAM10000('train')
+    val_dset = datasets.HAM10000('val')
+    test_dset = datasets.HAM10000('test')
+
+    # Add transforms
+    img_mean, img_std = train_dset.img_mean, train_dset.img_std
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize(img_mean / 255, img_std / 255)])
+    train_dset.transform = transform
+    val_dset.transform = transform
+    test_dset.transform = transform
+
+    # Create dloaders
+    batch_size = 256
+    train_dloader = data.DataLoader(train_dset, batch_size=batch_size, num_workers=4)
+    val_dloader = data.DataLoader(val_dset, batch_size=batch_size, num_workers=4)
+    test_dloader = data.DataLoader(val_dset, batch_size=batch_size, num_workers=4)
+
+    # Load resnet
+    resnet = models.resnet50(pretrained=True)
+    resnet.cuda()
+    resnet.eval()
+
+    # Get features
+    for dloader, name in [(train_dloader, 'train'), (val_dloader, 'val'), (test_dloader, 'test')]:
+        all_feats = []
+        with torch.no_grad():
+            for images, _ in dloader:
+                images = images.cuda()
+                _, feats = _get_intermediate_features(resnet, images)
+                all_feats.append(feats)
+        all_feats = [np.concatenate(fs) for fs in zip(*all_feats)]
+
+        with h5py.File(f'/src/dermosxai/data/HAM10000/resnet/{name}_features.h5', 'w') as f:
             for idx, arr in enumerate(all_feats):
                 f.create_dataset(str(idx), data=arr)
