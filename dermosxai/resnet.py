@@ -19,13 +19,13 @@ def _get_intermediate_features(resnet, input_):
         input_ (torch.Tensor): Input to the Resnet (N x C x H x W)
     
     Returns:
-        x (torch.Tensor): Output of the resnet (same as model(input_))
+        x (torch.Tensor): Output of the resnet (same as resnet(input_))
         features (list): A list with 51 feature representations. Each element is a 
             (N x num_features).
             
     Note:
-        To make sense of it, check the original forward. I essentially just copied 
-        everything here.
+        To make sense of it, check the original Resnet50 forward. I essentially just 
+        copied everything here.
     """
     features = []
 
@@ -90,7 +90,7 @@ def create_IAD_dsets():
     batch_size = 256
     train_dloader = data.DataLoader(train_dset, batch_size=batch_size, num_workers=4)
     val_dloader = data.DataLoader(val_dset, batch_size=batch_size, num_workers=4)
-    test_dloader = data.DataLoader(val_dset, batch_size=batch_size, num_workers=4)
+    test_dloader = data.DataLoader(test_dset, batch_size=batch_size, num_workers=4)
 
     # Load resnet
     resnet = models.resnet50(pretrained=True)
@@ -110,7 +110,7 @@ def create_IAD_dsets():
         with h5py.File(f'/src/dermosxai/data/IAD/resnet/{name}_features.h5', 'w') as f:
             for idx, arr in enumerate(all_feats):
                 f.create_dataset(str(idx), data=arr)
-                
+
 def create_HAM_dsets():
     """Extracts the ResNet intermediate representations and creates the h5 dsets."""
     # Load data
@@ -131,7 +131,7 @@ def create_HAM_dsets():
     batch_size = 256
     train_dloader = data.DataLoader(train_dset, batch_size=batch_size, num_workers=4)
     val_dloader = data.DataLoader(val_dset, batch_size=batch_size, num_workers=4)
-    test_dloader = data.DataLoader(val_dset, batch_size=batch_size, num_workers=4)
+    test_dloader = data.DataLoader(test_dset, batch_size=batch_size, num_workers=4)
 
     # Load resnet
     resnet = models.resnet50(pretrained=True)
