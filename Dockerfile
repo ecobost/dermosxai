@@ -1,4 +1,4 @@
-FROM pytorch/pytorch:1.9.0-cuda11.1-cudnn8-runtime
+FROM pytorch/pytorch:1.10.0-cuda11.3-cudnn8-runtime
 ARG DEBIAN_FRONTEND=noninteractive
 LABEL MANTAINER="Erick Cobos <ecobos@tuebingen.mpg.de>"
 WORKDIR /src
@@ -16,7 +16,7 @@ RUN pip install -e /src/dermosxai
 
 # Install extra libraries (non-essential but useful)
 RUN apt install -y python3-tk nano
-RUN pip install matplotlib jupyterlab ipympl seaborn pydicom
+RUN pip install matplotlib jupyterlab ipympl seaborn pydicom scikit-image
 RUN pip uninstall jedi -y # jupyter autocompletions are broken with this: https://stackoverflow.com/questions/40536560/ipython-and-jupyter-autocomplete-not-working
 
 # Clean apt lists
