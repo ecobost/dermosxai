@@ -194,8 +194,8 @@ margins2id = {
     'spiculated': 2,
     }
 
-id2magins = {
-    0: 'Circumscribed', 1: 'Ill defined', 2: 'Spiculated', 3: 'Obscured',
+id2margins = {
+    0: 'Circumscribed', 1: 'Ill-defined', 2: 'Spiculated', 3: 'Obscured',
     4: 'Microlobulated', -1: 'ignored'}
 
 
@@ -245,3 +245,7 @@ def get_DDSM():
         for s in splits}
 
     return images, labels, attributes
+
+# here just for reference
+# DDSM_value_names = [[f'Shape: {id2shape[i]}' for i in range(3)],
+#                     [f'Margins: {id2margins[i]}' for i in range(5)]]
