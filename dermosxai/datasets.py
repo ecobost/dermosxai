@@ -17,8 +17,8 @@ class IAD(pt_data.Dataset):
     
     Arguments:
         split(string): Whether to use the "train", "val" or "test" split.
-        transform (callable): Transform operation: receives an RGB image and returns the 
-            transformed image.
+        transform (callable): Transform operation: receives an uint8 RGB image and returns
+            the transformed image.
         one_image_per_lesion (bool): Whether only one image should be selected for each 
             lesion (there are usually diff images of the same lesion); first image in the 
             study is selected. If False, unravel all images into a single array.
@@ -168,7 +168,7 @@ class HAM10000(pt_data.Dataset):
 
         return example
 
-    
+
 class StackDataset(pt_data.Dataset):
     """ Stacks datasets along the batch axis. 
     
@@ -178,14 +178,18 @@ class StackDataset(pt_data.Dataset):
     def __init__(self, *datasets):
         self.datasets = datasets
         self.dset_lengths = [len(dset) for dset in datasets]
-    
+
     def __len__(self):
         sum(self.dset_lengths)
-    
+
     def __getitem__(self, i):
-        raise NotImplementedError
-        #TODO: Find which dset to sample from and return that
-        
+        for dset_idx, dset_length in enumerate(self.dset_lengths):
+            if i < dset_length:
+                break # found the right dset
+            else:
+                i = i - dset_length
+        return self.datasets[dset_idx][i]
+
 
 class ConcatDataset(pt_data.Dataset):
     """ Concatenate datasets.
@@ -199,12 +203,73 @@ class ConcatDataset(pt_data.Dataset):
     def __init__(self, *datasets):
         if any([len(dset) != len(datasets[0]) for dset in datasets]):
             raise ValueError('All datasets must have the same size.')
-        
+
         self.datasets = datasets
 
     def __len__(self):
         return len(self.datasets[0])
-    
+
     def __getitem__(self, i):
         return tuple(d[i] for d in self.datasets)
-        
+
+
+class DDSM(pt_data.Dataset):
+    """ CBIS-DDSM dataset.
+    
+    Images of breast cancer lesions, their diagnosis and (optionally) image-derived 
+    attributes: mass shape and mass margin. It has 1326 lesions with grayscale X-ray 
+    images cropped and resized to 128 x 128 pixels. Each lesion is diagnosed as benign
+    or malignant. Test split is provided (22%); we use 10% of the remaining training 
+    images as validation (patient stratified sampling).
+    
+    Arguments:
+        split(string): Whether to use the "train", "val" or "test" split.
+        transform (callable): Transform operation: receives a grayscale float image and 
+            returns the transformed image.
+        return_attributes (bool): Whether attributes should be returned along with images
+            and labels.
+    
+    Returns:
+        image (np.array): A 2-d np.float32 array (128 x 128).
+        label (int64): Whether mass was benign or malignant.
+        (optionally) attrs (np.array): Array with attributes as categorical attributes.
+    """
+    def __init__(self, split='train', transform=None, return_attributes=False):
+        # Load data
+        images, labels, attributes = data.get_DDSM()
+
+        # Split data
+        if split not in ['train', 'val', 'test']:
+            raise ValueError('split can only be train/val/test')
+        self.images = images[split]
+        self.labels = labels[split].astype(np.int64)
+
+        # Get attributes (if needed)
+        self.return_attributes = return_attributes
+        if return_attributes:
+            # Get attributes
+            self.attributes = attributes[split].astype(np.int64)
+            #self.attribute_names = None
+
+        # Save transform
+        self.transform = transform
+
+    @property
+    def img_mean(self):
+        return self.images.mean()
+
+    @property
+    def img_std(self):
+        return self.images.std(axis=(1, 2)).mean()
+
+    def __len__(self):
+        return len(self.images)
+
+    def __getitem__(self, i):
+        example = (self.images[i], self.labels[i])
+        if self.transform is not None:
+            example = (self.transform(example[0]), example[1])
+        if self.return_attributes:
+            example = (*example, self.attributes[i])
+
+        return example
