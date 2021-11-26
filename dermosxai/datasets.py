@@ -5,6 +5,7 @@ import numpy as np
 from dermosxai import data
 from dermosxai import utils
 
+
 class IAD(pt_data.Dataset):
     """ Interactive Atlas of Dermoscopy (IAD) dataset.
     
@@ -24,6 +25,8 @@ class IAD(pt_data.Dataset):
             study is selected. If False, unravel all images into a single array.
         return_attributes (bool): Whether attributes should be returned along with images
             and labels
+        split_proportion (tuple): Proportion of examples in the training set and 
+            validation set (test set has all remaining examples).
     
     Returns:
         image (np.array): A 3-d np.uint8 array (150 x 200 x 3).
@@ -32,12 +35,13 @@ class IAD(pt_data.Dataset):
             returned variables can be accessed as dset.attribute_names
     """
     def __init__(self, split='train', transform=None, one_image_per_lesion=True,
-                 return_attributes=False):
+                 return_attributes=False, split_proportion=(0.8, 0.1)):
         # Load data
         images, labels = data.get_IAD()
 
         # Split data
-        train_slice, val_slice, test_slice = utils.split_data(len(images))
+        train_slice, val_slice, test_slice = utils.split_data(len(images),
+                                                              split_proportion)
         if split == 'train':
             split_slice = train_slice
         elif split == 'val':
@@ -50,7 +54,7 @@ class IAD(pt_data.Dataset):
         self.labels = labels[split_slice]
 
         # Deal with each lesion having a diff number of images.
-        if one_image_per_lesion: # pick the first image for each lesion
+        if one_image_per_lesion:  # pick the first image for each lesion
             self.images = np.stack([lesion[0] for lesion in self.images])
         else:
             num_images_per_lesion = [len(lesion) for lesion in self.images]
@@ -115,17 +119,21 @@ class HAM10000(pt_data.Dataset):
         one_image_per_lesion (bool): Whether only one image should be selected for each 
             lesion (there are usually > 1 images of the same lesion); first image in the 
             study is selected. If False, unravel all images into a single array.
+        split_proportion (tuple): Proportion of examples in the training set and 
+            validation set (test set has all remaining examples).
     
     Returns:
         image (np.array): A 3-d np.uint8 array (150 x 200 x 3).
         label (int64): A single digit in [0, 3]
     """
-    def __init__(self, split='train', transform=None, one_image_per_lesion=True):
+    def __init__(self, split='train', transform=None, one_image_per_lesion=True,
+                 split_proportion=(0.8, 0.1)):
         # Load data
         images, labels = data.get_HAM10000()
 
         # Split data
-        train_slice, val_slice, test_slice = utils.split_data(len(images))
+        train_slice, val_slice, test_slice = utils.split_data(len(images),
+                                                              split_proportion)
         if split == 'train':
             split_slice = train_slice
         elif split == 'val':
@@ -168,49 +176,50 @@ class HAM10000(pt_data.Dataset):
 
         return example
 
+#TODO: Delete, already implemented in torch.utils.data.ConcatDataset
+# class StackDataset(pt_data.Dataset):
+#     """ Stacks datasets along the batch axis.
 
-class StackDataset(pt_data.Dataset):
-    """ Stacks datasets along the batch axis. 
-    
-    Arguments:
-        datasets: Datasets to stack.
-    """
-    def __init__(self, *datasets):
-        self.datasets = datasets
-        self.dset_lengths = [len(dset) for dset in datasets]
+#     Arguments:
+#         datasets: Datasets to stack.
+#     """
+#     def __init__(self, *datasets):
+#         self.datasets = datasets
+#         self.dset_lengths = [len(dset) for dset in datasets]
 
-    def __len__(self):
-        sum(self.dset_lengths)
+#     def __len__(self):
+#         sum(self.dset_lengths)
 
-    def __getitem__(self, i):
-        for dset_idx, dset_length in enumerate(self.dset_lengths):
-            if i < dset_length:
-                break # found the right dset
-            else:
-                i = i - dset_length
-        return self.datasets[dset_idx][i]
+#     def __getitem__(self, i):
+#         for dset_idx, dset_length in enumerate(self.dset_lengths):
+#             if i < dset_length:
+#                 break  # found the right dset
+#             else:
+#                 i = i - dset_length
+#         return self.datasets[dset_idx][i]
 
+#TODO: Delete, will now send the attribute predictor directly during join training rather
+# than precompute the attributes and create a StackDset
+# class ConcatDataset(pt_data.Dataset):
+#     """ Concatenate datasets.
 
-class ConcatDataset(pt_data.Dataset):
-    """ Concatenate datasets.
-    
-    Arguments:
-        datasets: Datasets to concatenate. They should all have the same length.
-        
-    Returns:
-        (ex1, ex2, ..., exn): A tuple with as many entries as there are datasets.
-    """
-    def __init__(self, *datasets):
-        if any([len(dset) != len(datasets[0]) for dset in datasets]):
-            raise ValueError('All datasets must have the same size.')
+#     Arguments:
+#         datasets: Datasets to concatenate. They should all have the same length.
 
-        self.datasets = datasets
+#     Returns:
+#         (ex1, ex2, ..., exn): A tuple with as many entries as there are datasets.
+#     """
+#     def __init__(self, *datasets):
+#         if any([len(dset) != len(datasets[0]) for dset in datasets]):
+#             raise ValueError('All datasets must have the same size.')
 
-    def __len__(self):
-        return len(self.datasets[0])
+#         self.datasets = datasets
 
-    def __getitem__(self, i):
-        return tuple(d[i] for d in self.datasets)
+#     def __len__(self):
+#         return len(self.datasets[0])
+
+#     def __getitem__(self, i):
+#         return tuple(d[i] for d in self.datasets)
 
 
 class DDSM(pt_data.Dataset):
@@ -232,7 +241,8 @@ class DDSM(pt_data.Dataset):
     Returns:
         image (np.array): A 2-d np.float32 array (128 x 128).
         label (int64): Whether mass was benign or malignant.
-        (optionally) attrs (np.array): Array with attributes as categorical attributes.
+        (optionally) attrs (np.array): Array with attributes (shape and margin) as 
+            categorical variables (0-n).
     """
     def __init__(self, split='train', transform=None, return_attributes=False):
         # Load data
@@ -240,14 +250,13 @@ class DDSM(pt_data.Dataset):
 
         # Split data
         if split not in ['train', 'val', 'test']:
-            raise ValueError('split can only be train/val/test')
+            raise ValueError(f'split can only be train/val/test, not {split}')
         self.images = images[split]
         self.labels = labels[split].astype(np.int64)
 
         # Get attributes (if needed)
         self.return_attributes = return_attributes
         if return_attributes:
-            # Get attributes
             self.attributes = attributes[split].astype(np.int64)
             #self.attribute_names = None
 
