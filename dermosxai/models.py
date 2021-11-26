@@ -423,3 +423,206 @@ def gaussian_tc(mu, logsigma, dset_size=1, eps=1e-9):
     tc = logqz - logqz_i.sum()
 
     return tc
+
+
+
+############################### CLASSIFICATION MODELS ###################################
+from torchvision import models
+
+
+class ResNetBase(nn.Module):
+    """ A trainable ResNet50 module cropped after some number of layers (0-5).
+        
+    Arguments:
+        num_blocks (int): Number of residual blocks the resulting ResNet is clipped at.
+            Every resnet has 4 blocks each with diff number of convs (see Tab.1 in 
+            He et al. 2015).
+        pretrained (bool): Whether the Resnet is pretrained on ImageNet.
+    
+    Note:
+        Blocks outputs are usually ReLUed. Outputs are also not avgpooled.
+    """
+    def __init__(self, num_blocks, pretrained=True):
+        super().__init__()
+
+        # Load resnet
+        self.pretrained = pretrained
+        self.resnet = models.resnet50(pretrained=pretrained)  # could be any other ResNet
+
+        # Save num_blocks
+        if num_blocks < 0 or num_blocks > 5:
+            raise ValueError('num_blocks needs to be in [0, 5] range')
+        self.num_blocks = num_blocks
+
+        # Drop unnecesary modules (not necessary but makes network smaller when saving)
+        if num_blocks < 5:
+            del self.resnet.fc
+            del self.resnet.avgpool
+        if num_blocks < 4:
+            del self.resnet.layer4
+        if num_blocks < 3:
+            del self.resnet.layer3
+        if num_blocks < 2:
+            del self.resnet.layer2
+        if num_blocks < 1:
+            del self.resnet.layer1
+
+        # Find out number of channels in the final feature map (just for documentation)
+        with torch.no_grad():
+            self.eval()
+            self.out_channels = self.forward(torch.randn(1, 3, 224, 224)).shape[1]
+            self.train()
+
+    def forward(self, x):
+        """Copies the forward from resnet50 and crops it at desired depth"""
+        x = self.resnet.conv1(x)
+        x = self.resnet.bn1(x)
+        x = self.resnet.relu(x)
+        x = self.resnet.maxpool(x)
+        if self.num_blocks == 0:
+            return x
+
+        x = self.resnet.layer1(x)
+        if self.num_blocks == 1:
+            return x
+        x = self.resnet.layer2(x)
+        if self.num_blocks == 2:
+            return x
+        x = self.resnet.layer3(x)
+        if self.num_blocks == 3:
+            return x
+        x = self.resnet.layer4(x)
+        if self.num_blocks == 4:
+            return x
+
+        x = self.resnet.avgpool(x)
+        x = torch.flatten(x, 1)
+        x = self.resnet.fc(x)
+
+        return x
+
+    def init_parameters(self):
+        if self.pretrained:
+            print('ResNetBase using pretrained weights for initialization')
+        else:
+            raise NotImplementedError
+
+
+class MultiLinearHead(nn.Module):
+    """Average pools input and applies different linear layers to the input.
+    
+    Arguments:
+        in_channels (int): Number of feature maps in the input.
+        out_channels (list of int): Number of output channels for each of the linear 
+            layers.
+    
+    Note:
+        The advantage of this module over a simple linear layer with sum(out_channels) 
+        outputs is that each linear readout here has its own bias and it is easier to 
+        later apply a softmax to each of this outputs.
+    """
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+
+        linear_layers = [nn.Linear(in_channels, oc) for oc in out_channels]
+        self.linear_layers = nn.ModuleList(linear_layers)
+
+    def init_parameters(self):
+        init_conv(self.linear_layers)
+
+    def forward(self, x):
+        x_flat = F.adaptive_avg_pool2d(x, 1).squeeze(-1).squeeze(-1) if x.ndim == 4 else x
+        return [ll(x_flat) for ll in self.linear_layers]
+
+
+class ResNetPlustMultiLinear(nn.Module):
+    """ ResNet with multiple linear readouts.
+        
+    Arguments:
+        num_blocks (int): Number of resnet blocks for the base (0-5).
+        pretrained_resnet (bool):  Wheher to load the pretrained version of the resnet.
+        out_channels (list of int): Number of outputs for each linear readout.
+    """
+    def __init__(self, num_blocks, out_channels, pretrained_resnet=True):
+        super().__init__()
+        self.base = ResNetBase(num_blocks, pretrained=pretrained_resnet)
+        self.head = MultiLinearHead(in_channels=self.base.out_channels,
+                                    out_channels=out_channels)
+
+    def forward(self, x):
+        x_feats = self.base(x)
+        out = self.head(x_feats)
+        return out
+
+    def init_parameters(self):
+        self.base.init_parameters()
+        self.head.init_parameters()
+
+
+class ConvNetBase(nn.Module):
+    """ A small convnet architecture to work as a feature extractor.
+    
+    Arguments:
+        in_channels (int): Expected input channels in the image.
+        out_channels (int): Desired output channels
+    """
+    def __init__(self, in_channels, out_channels=64):
+        super().__init__()
+
+        # Create layers
+        layers = [
+            nn.Conv2d(in_channels, 16, kernel_size=4, stride=2, padding=1,
+                      padding_mode='reflect', bias=False),
+            nn.BatchNorm2d(16),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(16, 16, kernel_size=4, stride=2, padding=1, padding_mode='reflect',
+                      bias=False),
+            nn.BatchNorm2d(16),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(16, 32, kernel_size=4, stride=2, padding=1, padding_mode='reflect',
+                      bias=False),
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(32, 32, kernel_size=4, stride=2, padding=1, padding_mode='reflect',
+                      bias=False),
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=1, padding_mode='reflect',
+                      bias=False),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, out_channels, kernel_size=4, bias=False),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True), ]
+        self.layers = nn.Sequential(*layers)
+        self.out_channels = out_channels
+
+    def forward(self, x):
+        return self.layers(x)
+
+    def init_parameters(self):
+        init_conv(m for m in self.layers if isinstance(m, nn.Conv2d))
+        init_bn(m for m in self.layers if isinstance(m, nn.BatchNorm2d))
+
+
+class ConvNetPlusMultiLinear(nn.Module):
+    """ Small convnet for feature extraction and a multi-linear readout.
+    
+    Arguments:
+        in_channels (int): Number of channels in the input image
+        out_channels (list of int): Number of outputs for each linear readout.
+    """
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+        self.base = ConvNetBase(in_channels)
+        self.head = MultiLinearHead(in_channels=self.base.out_channels,
+                                    out_channels=out_channels)
+
+    def forward(self, x):
+        x_feats = self.base(x)
+        out = self.head(x_feats)
+        return out
+
+    def init_parameters(self):
+        self.base.init_parameters()
+        self.head.init_parameters()
