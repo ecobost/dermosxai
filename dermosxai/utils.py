@@ -4,7 +4,6 @@ import time
 from sklearn import metrics
 
 
-
 def crop_black_edges(im, threshold=10):
     """ Crops black edges around an image by transforming it into grayscale (if needed), 
     thresholding it and then dropping any rows/cols with no value above the threshold.
@@ -34,11 +33,12 @@ def crop_black_edges(im, threshold=10):
     first_row, last_row = nonzero_rows[0], nonzero_rows[-1] + 1
 
     # Crop image
-    cropped_im = im[first_row: last_row, first_col:last_col]
+    cropped_im = im[first_row:last_row, first_col:last_col]
 
     return cropped_im
 
-def crop_to_ratio(im, desired_ratio=4/3):
+
+def crop_to_ratio(im, desired_ratio=4 / 3):
     """ Crop (either) the rows or columns of an image to match (as best as possible) the 
     desired ratio.
     
@@ -67,6 +67,7 @@ def crop_to_ratio(im, desired_ratio=4/3):
 
     return cropped_image
 
+
 def tprint(*messages):
     """ Prints a message (with a timestamp next to it).
     
@@ -75,6 +76,7 @@ def tprint(*messages):
     """
     formatted_time = '[{}]'.format(time.ctime())
     print(formatted_time, *messages, flush=True)
+
 
 def create_grid(ims, num_rows=3, num_cols=4, row_gap=5, col_gap=5, bg_value=1):
     """ Creates a grid of images from individual images.
@@ -103,6 +105,7 @@ def create_grid(ims, num_rows=3, num_cols=4, row_gap=5, col_gap=5, bg_value=1):
              col * (width + col_gap):col * (width + col_gap) + width] = im
 
     return grid
+
 
 def to_npy(torch_im, img_mean=0, img_std=1):
     """ Transform a (batch of) torch.Float tensor image(s) into a numpy array.
@@ -196,12 +199,12 @@ def compute_metrics(probs, targets, average='macro'):
     mcc = metrics.matthews_corrcoef(targets, pred_labels)
     f1 = metrics.f1_score(targets, pred_labels, average=average)
     binary_targets = binarize_categorical(targets, num_categories=probs.shape[-1])
-    if any(binary_targets.sum(0) == 0): 
+    if any(binary_targets.sum(0) == 0):
         # AUC and PRAUC are undefined when there is only one value for one class.
         auc = float('nan')
         ap = float('nan')
     else:
-        auc = metrics.roc_auc_score(binary_targets, probs, multi_class='ovr', 
+        auc = metrics.roc_auc_score(binary_targets, probs, multi_class='ovr',
                                     average=average)
         ap = metrics.average_precision_score(binary_targets, probs, average=average)
 
@@ -211,7 +214,7 @@ def compute_metrics(probs, targets, average='macro'):
 def off_diagonal(m):
     """Returns off-diagonal elements of a square matrix. """
     n = m.shape[0]
-    return m.flatten()[1:].view(n - 1, n + 1)[:, :-1].flatten()#.reshape(n, n-1)
+    return m.flatten()[1:].view(n - 1, n + 1)[:, :-1].flatten()  #.reshape(n, n-1)
 
 
 def split_data(num_examples, split=[0.8, 0.1]):
