@@ -16,7 +16,7 @@ from dermosxai import models
 
 
 def finetune(model, train_dset, val_dset, seed=1, batch_size=64, learning_rate=0.01,
-             weight_decay=0, num_epochs=200, decay_epochs=5, lr_decay=0.1,
+             weight_decay=1e-5, num_epochs=200, decay_epochs=5, lr_decay=0.01,
              stopping_epochs=20, base_lr_factor=1, wandb_group=None,
              wandb_extra_hyperparams={}):
     """  Train attribute prediction model with different learning rate for base and head.
@@ -253,33 +253,38 @@ def train_DDSM_resnets():
                         weight_decay=weight_decay, base_lr_factor=base_lr_factor,
                         wandb_group='ddsm', wandb_extra_hyperparams={
                             'base': 'resnet', 'resnet_block': resnet_block})
+    """
+    Selected hyperparams: resnet_block 3, lr 0.01, base_lr_factor 0.01, weight_decay 1e-5
+    MCC: 1.0 for training and validation.
+    Name of wandb run: glorious-serenity-174
+    """
 
+# ended up not training these, resnet achieves 100% train/val accuracy
+# def train_DDSM_convnet():
+#     # Get dsets
+#     train_dset = datasets.DDSM('train', return_attributes=True)
+#     val_dset = datasets.DDSM('val', return_attributes=True)
 
-def train_DDSM_convnet():
-    # Get dsets
-    train_dset = datasets.DDSM('train', return_attributes=True)
-    val_dset = datasets.DDSM('val', return_attributes=True)
+#     # Add transforms
+#     train_transform, val_transform = transforms.get_DDSM_transforms(
+#         train_dset.img_mean, train_dset.img_std)
+#     train_dset.transform = train_transform
+#     val_dset.transform = val_transform
 
-    # Add transforms
-    train_transform, val_transform = transforms.get_DDSM_transforms(
-        train_dset.img_mean, train_dset.img_std)
-    train_dset.transform = train_transform
-    val_dset.transform = val_transform
+#     # Compute num_values_per_attr
+#     num_values_per_attr = train_dset.attributes.max(0) + 1
 
-    # Compute num_values_per_attr
-    num_values_per_attr = train_dset.attributes.max(0) + 1
+#     # Set hyperparams
+#     for learning_rate in [1e-4, 1e-3, 1e-2, 1e-1]:
+#         for weight_decay in [0, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1]:
+#             # Define model
+#             model = models.ConvNetPlustMultiLinear(in_channels=1,
+#                                                    out_channels=num_values_per_attr)
 
-    # Set hyperparams
-    for learning_rate in [1e-4, 1e-3, 1e-2, 1e-1]:
-        for weight_decay in [0, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1]:
-            # Define model
-            model = models.ConvNetPlustMultiLinear(in_channels=1,
-                                                   out_channels=num_values_per_attr)
-
-            # Train
-            finetune(model, train_dset, val_dset, learning_rate=learning_rate,
-                     weight_decay=weight_decay, wandb_group='ddsm',
-                     wandb_extra_hyperparams={'base': 'convnet'})
+#             # Train
+#             finetune(model, train_dset, val_dset, learning_rate=learning_rate,
+#                      weight_decay=weight_decay, wandb_group='ddsm',
+#                      wandb_extra_hyperparams={'base': 'convnet'})
 
 
 def train_IAD_resnets():
@@ -317,40 +322,40 @@ def train_IAD_resnets():
                         model, train_dset, val_dset, learning_rate=learning_rate,
                         weight_decay=weight_decay, base_lr_factor=base_lr_factor,
                         wandb_group='iad', wandb_extra_hyperparams={
-                            'base': 'convnet',
+                            'base': 'resnet', 'resnet_block': resnet_block,
                             'full_augmentation': use_full_augmentations})
 
+# ended up  not training these
+# def train_IAD_convnet():
+#     """
+#     Note: I use 85% of the data for training and 15% as validation. I do not report
+#     results in this dataset so I don't need a test set.
+#     """
+#     # Get dsets
+#     train_dset = datasets.IAD('train', return_attributes=True,
+#                               split_proportion=(0.85, 0.15))
+#     val_dset = datasets.IAD('val', return_attributes=True, split_proportion=(0.85, 0.15))
 
-def train_IAD_convnet():
-    """
-    Note: I use 85% of the data for training and 15% as validation. I do not report 
-    results in this dataset so I don't need a test set.
-    """
-    # Get dsets
-    train_dset = datasets.IAD('train', return_attributes=True,
-                              split_proportion=(0.85, 0.15))
-    val_dset = datasets.IAD('val', return_attributes=True, split_proportion=(0.85, 0.15))
+#     # Add transforms
+#     use_full_augmentations = False
+#     train_transform, val_transform = transforms.get_IAD_transforms(
+#         train_dset.img_mean, train_dset.img_std,
+#         use_full_augmentations=use_full_augmentations)
+#     train_dset.transform = train_transform
+#     val_dset.transform = val_transform
 
-    # Add transforms
-    use_full_augmentations = False
-    train_transform, val_transform = transforms.get_IAD_transforms(
-        train_dset.img_mean, train_dset.img_std,
-        use_full_augmentations=use_full_augmentations)
-    train_dset.transform = train_transform
-    val_dset.transform = val_transform
+#     # Compute num_values_per_attr
+#     num_values_per_attr = train_dset.attributes.max(0) + 1
 
-    # Compute num_values_per_attr
-    num_values_per_attr = train_dset.attributes.max(0) + 1
+#     # Set hyperparams
+#     for learning_rate in [1e-4, 1e-3, 1e-2, 1e-1]:
+#         for weight_decay in [0, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1]:
+#             # Define model
+#             model = models.ConvNetPlustMultiLinear(in_channels=3,
+#                                                    out_channels=num_values_per_attr)
 
-    # Set hyperparams
-    for learning_rate in [1e-4, 1e-3, 1e-2, 1e-1]:
-        for weight_decay in [0, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1]:
-            # Define model
-            model = models.ConvNetPlustMultiLinear(in_channels=3,
-                                                   out_channels=num_values_per_attr)
-
-            # Train
-            finetune(
-                model, train_dset, val_dset, learning_rate=learning_rate,
-                weight_decay=weight_decay, wandb_group='iad', wandb_extra_hyperparams={
-                    'base': 'convnet', 'full_augmentation': use_full_augmentations})
+#             # Train
+#             finetune(
+#                 model, train_dset, val_dset, learning_rate=learning_rate,
+#                 weight_decay=weight_decay, wandb_group='iad', wandb_extra_hyperparams={
+#                     'base': 'convnet', 'full_augmentation': use_full_augmentations})
