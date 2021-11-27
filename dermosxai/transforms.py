@@ -13,7 +13,7 @@ class Expandto3Channels():
         return x.expand(3, -1, -1)
 
 
-def get_DDSM_transforms(img_mean, img_std, make_rgb=False):
+def get_DDSM_transforms(img_mean, img_std, make_rgb=True):
     """ Get the train and test transformation for DDSM datasets.
     
     Standard transformations: RandomHorizontalFlip, RandomVerticalFlip, Random90Rotation,
