@@ -142,21 +142,20 @@ def binarize_categorical(categorical, num_categories=None):
     """
     if num_categories is None:
         num_categories = categorical.max() + 1
-    return np.eye(num_categories)[categorical]
+    return np.eye(num_categories, dtype=bool)[categorical]
 
 
-def compute_metrics(probs, targets, average='macro'):
-    """Computes a set of classification metrics.
+def compute_metrics(probs, targets):
+    """ Computes a set of classification metrics.
+    
+    In the multi-class case, F1, AUC and AP are computed per class and averaged; for the 
+    binary case, the F1, AUC and AP of the positive class is returned.
     
     Arguments:
         probs (np.array): A num_samples x num_classes array with the predicted 
             probabilities per class.
         targets (np.array): A num_samples array with the correct target classes 
             (in [0, n) range).
-        average (None, 'micro', or 'macro'): How to average F1, AUC and AP:
-            None: Returns an array with the per-class metrics.
-            micro: Computes a global confusion matrix and computes the metrics.
-            macro: Computes the metrics per class and averages.
             
     Returns
         accuracy (float): Classification accuracy.
@@ -193,20 +192,34 @@ def compute_metrics(probs, targets, average='macro'):
         (MCC) over F1 score and accuracy in binary classification evaluation. BMC Genomics 
         21, 6 (2020).
     """
+    # Sanity check
+    if probs.ndim != 2 or probs.shape[-1] < 2:
+        # in case they send only the probs for the positive class (a num_examples vector)
+        raise ValueError('Expects probabilities to be num_examples x num_classes matrix.')
+
+    # Compute metrics
     pred_labels = np.argmax(probs, -1)
     accuracy = metrics.accuracy_score(targets, pred_labels)
     kappa = metrics.cohen_kappa_score(targets, pred_labels)
     mcc = metrics.matthews_corrcoef(targets, pred_labels)
-    f1 = metrics.f1_score(targets, pred_labels, average=average)
-    binary_targets = binarize_categorical(targets, num_categories=probs.shape[-1])
-    if any(binary_targets.sum(0) == 0):
-        # AUC and PRAUC are undefined when there is only one value for one class.
-        auc = float('nan')
-        ap = float('nan')
+
+    # Compute metrics that are averaged across all classes
+    num_classes = probs.shape[-1]
+    binarized_targets = binarize_categorical(targets.astype(int),
+                                             num_categories=num_classes)
+    f1 = metrics.f1_score(targets, pred_labels,
+                          average='binary' if num_classes == 2 else 'macro')
+    if all(binarized_targets.sum(0) > 0):  # all classes have at least one example
+        if num_classes == 2:
+            auc = metrics.roc_auc_score(targets, probs[:, 1])
+            ap = metrics.average_precision_score(targets, probs[:, 1])
+        else:
+            auc = metrics.roc_auc_score(targets, probs, multi_class='ovr')
+            ap = metrics.average_precision_score(binarized_targets, probs)  #*
+            #* unsure about this one, sklearn says it is multi-label not multiclass (?)
     else:
-        auc = metrics.roc_auc_score(binary_targets, probs, multi_class='ovr',
-                                    average=average)
-        ap = metrics.average_precision_score(binary_targets, probs, average=average)
+        # equivalent to all examples having the same label for the binary case.
+        ap, auc = float('nan'), float('nan')  # AUC and PRAUC are undefined
 
     return accuracy, kappa, mcc, f1, auc, ap
 
