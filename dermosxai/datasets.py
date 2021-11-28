@@ -176,51 +176,6 @@ class HAM10000(pt_data.Dataset):
 
         return example
 
-#TODO: Delete, already implemented in torch.utils.data.ConcatDataset
-# class StackDataset(pt_data.Dataset):
-#     """ Stacks datasets along the batch axis.
-
-#     Arguments:
-#         datasets: Datasets to stack.
-#     """
-#     def __init__(self, *datasets):
-#         self.datasets = datasets
-#         self.dset_lengths = [len(dset) for dset in datasets]
-
-#     def __len__(self):
-#         sum(self.dset_lengths)
-
-#     def __getitem__(self, i):
-#         for dset_idx, dset_length in enumerate(self.dset_lengths):
-#             if i < dset_length:
-#                 break  # found the right dset
-#             else:
-#                 i = i - dset_length
-#         return self.datasets[dset_idx][i]
-
-#TODO: Delete, will now send the attribute predictor directly during join training rather
-# than precompute the attributes and create a StackDset
-# class ConcatDataset(pt_data.Dataset):
-#     """ Concatenate datasets.
-
-#     Arguments:
-#         datasets: Datasets to concatenate. They should all have the same length.
-
-#     Returns:
-#         (ex1, ex2, ..., exn): A tuple with as many entries as there are datasets.
-#     """
-#     def __init__(self, *datasets):
-#         if any([len(dset) != len(datasets[0]) for dset in datasets]):
-#             raise ValueError('All datasets must have the same size.')
-
-#         self.datasets = datasets
-
-#     def __len__(self):
-#         return len(self.datasets[0])
-
-#     def __getitem__(self, i):
-#         return tuple(d[i] for d in self.datasets)
-
 
 class DDSM(pt_data.Dataset):
     """ CBIS-DDSM dataset.
