@@ -220,11 +220,11 @@ class DDSM(pt_data.Dataset):
 
     @property
     def img_mean(self):
-        return self.images.mean()
+        return self.images.astype(np.float64).mean()
 
     @property
     def img_std(self):
-        return self.images.std(axis=(1, 2)).mean()
+        return self.images.astype(np.float64).std(axis=(1, 2)).mean()
 
     def __len__(self):
         return len(self.images)
