@@ -40,11 +40,10 @@ def get_DDSM_transforms(img_mean, img_std, make_rgb=True):
 
 
 def get_IAD_transforms(img_mean, img_std, use_full_augmentations=False):
-    """ Get the train and test transformation for IAD datasets.
+    """ Get the train and test transformation for IAD/HAM10000 datasets.
     
     Standard transformations: RandomHorizontalFlip, RandomVerticalFlip, Normalization and
         ToTensor.
-    
     
     Arguments:
         img_mean, img_std: Mean and std values used for the normalization. Usually taken
@@ -71,3 +70,6 @@ def get_IAD_transforms(img_mean, img_std, use_full_augmentations=False):
         transforms.Normalize(img_mean / 255, img_std / 255)])
 
     return train_transform, test_transform
+
+
+get_HAM10000_transforms = get_IAD_transforms  # just for convenience
