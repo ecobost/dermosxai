@@ -535,7 +535,7 @@ class MultiLinearHead(nn.Module):
         return [ll(x_flat) for ll in self.linear_layers]
 
 
-class ResNetPlustMultiLinear(nn.Module):
+class ResNetPlusMultiLinear(nn.Module):
     """ ResNet with multiple linear readouts.
         
     Arguments:

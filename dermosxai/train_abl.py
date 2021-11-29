@@ -17,7 +17,7 @@ from dermosxai import models
 
 def finetune(model, train_dset, val_dset, seed=1, batch_size=64, learning_rate=0.01,
              weight_decay=1e-5, num_epochs=200, decay_epochs=5, lr_decay=0.01,
-             stopping_epochs=20, base_lr_factor=1, wandb_group=None,
+             stopping_epochs=20, base_lr_factor=0.01, wandb_group=None,
              wandb_extra_hyperparams={}):
     """  Train attribute prediction model with different learning rate for base and head.
     
@@ -244,8 +244,8 @@ def train_DDSM_resnets():
             for base_lr_factor in [0, 1e-4, 1e-3, 1e-2]:
                 for weight_decay in [0, 1e-5, 1e-3, 1e-1]:
                     # Define model
-                    model = models.ResNetPlustMultiLinear(
-                        num_blocks=resnet_block, out_channels=num_values_per_attr)
+                    model = models.ResNetPlusMultiLinear(num_blocks=resnet_block,
+                                                         out_channels=num_values_per_attr)
 
                     # Train
                     finetune(
@@ -314,8 +314,8 @@ def train_IAD_resnets():
             for base_lr_factor in [0, 1e-4, 1e-3, 1e-2]:
                 for weight_decay in [0, 1e-5, 1e-3, 1e-1]:
                     # Define model
-                    model = models.ResNetPlustMultiLinear(
-                        num_blocks=resnet_block, out_channels=num_values_per_attr)
+                    model = models.ResNetPlusMultiLinear(num_blocks=resnet_block,
+                                                         out_channels=num_values_per_attr)
 
                     # Train
                     finetune(
