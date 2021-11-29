@@ -153,9 +153,9 @@ def compute_metrics(probs, targets):
     
     Arguments:
         probs (np.array): A num_samples x num_classes array with the predicted 
-            probabilities per class.
-        targets (np.array): A num_samples array with the correct target classes 
-            (in [0, n) range).
+            probabilities per class. Should sum up to 1 per example.
+        targets (np.array): An num_samples array (int or bool) with the correct target 
+            classes (in [0, n) range).
             
     Returns
         accuracy (float): Classification accuracy.

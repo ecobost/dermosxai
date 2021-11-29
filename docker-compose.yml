@@ -34,4 +34,4 @@ services:
     entrypoint: /bin/bash
     working_dir: /src/dermosxai
     ipc: host # needed for multiprocessing (dataloader) in pytorch
-#    user: "7610:1040" # uid:groupid, can't be automated because docker-compose can't run bash commands (so i'll do something like $(id -u):$(id -g)
+#    user: "7610:1040" # uid:groupid, can't be automated because docker-compose can't run bash commands (so i can't do something like $(id -u):$(id -g)
