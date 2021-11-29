@@ -168,7 +168,7 @@ def finetune(model, train_dset, val_dset, seed=1, batch_size=64, learning_rate=0
                 val_metrics.append(utils.compute_metrics(probs, lbl.numpy()))
             val_loss = sum(val_xents) / len(val_xents)
             val_accuracy, val_kappa, val_mcc, val_f1, val_auc, val_ap = [
-                sum(m) / len(m) for m in zip(*metrics)]
+                sum(m) / len(m) for m in zip(*val_metrics)]
 
             # Log
             wandb.log({
