@@ -106,8 +106,8 @@ class MIEstimator(nn.Module):
                 if torch.isnan(self.running_exp):  # very first iteration
                     self.running_exp = torch.exp(logmeanexp)
                 else:
-                    self.running_exp = 0.9 * torch.exp(
-                        logmeanexp) + 0.1 * self.running_exp
+                    self.running_exp = 0.9 * self.running_exp + 0.1 * torch.exp(
+                        logmeanexp)
         dv_loss = diag.mean() - torch.exp(logmeanexp) / (self.running_exp + 1e-8)
 
         # Compute JSD
@@ -151,13 +151,12 @@ def train_mi(train_x, train_y, val_x, val_y, mi_version='mine', batch_size=96, s
     
     Returns:
         best_model (MIEstimator): Best Mi estimator.
-        vds, vd_losses, jsds, infonces: Training MI estimates. 
-        val_vds, val_vd_losses, val_jsds, val_infonces: MI estimates on validation set.
+        dvs, dv_losses, jsds, infonces: Training MI estimates. 
+        val_dvs, val_dv_losses, val_jsds, val_infonces: MI estimates on validation set.
 
     Note: 
         This method uses the data as is. Make sure to normalize it before sending it here.
     """
-    from dermosxai import datasets
     from torch.utils import data
     from torch import optim
     from torch.optim import lr_scheduler
@@ -165,7 +164,7 @@ def train_mi(train_x, train_y, val_x, val_y, mi_version='mine', batch_size=96, s
     import time
 
     # Get datasets
-    train_dset = datasets.ConcatDataset(train_x, train_y)
+    train_dset = data.TensorDataset(train_x, train_y)
     train_dloader = data.DataLoader(train_dset, batch_size=batch_size, shuffle=True,
                                     num_workers=4, drop_last=True)
 
@@ -271,7 +270,7 @@ def train_mi(train_x, train_y, val_x, val_y, mi_version='mine', batch_size=96, s
             break
 
     # Report
-    training_time = round((time.time() - start_time)) # in minutes
+    training_time = round((time.time() - start_time))  # in minutes
     utils.tprint(f'Reached max epochs in {training_time} seconds')
 
     return (best_model, dvs, dv_losses, jsds, infonces, val_dvs, val_dv_losses, val_jsds,
