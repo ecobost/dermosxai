@@ -225,6 +225,7 @@ def finetune(model, train_dset, val_dset, seed=1, batch_size=64, learning_rate=0
 
 
 def train_DDSM_resnets():
+    """ Train DDSM attribute predictors on a range of hyperparameters."""
     # Get dsets
     train_dset = datasets.DDSM('train', return_attributes=True)
     val_dset = datasets.DDSM('val', return_attributes=True)
@@ -240,9 +241,9 @@ def train_DDSM_resnets():
 
     # Set hyperparams
     for resnet_block in range(1, 5):
-        for learning_rate in [1e-4, 1e-3, 1e-2, 1e-1]:
-            for base_lr_factor in [0, 1e-4, 1e-3, 1e-2]:
-                for weight_decay in [0, 1e-5, 1e-3, 1e-1]:
+        for learning_rate in [1e-3, 1e-2, 1e-1, 1e0]:
+            for base_lr_factor in [0, 1e-3, 1e-2, 1e-1]:
+                for weight_decay in [0, 1e-4, 1e-2, 1e0]:
                     # Define model
                     model = models.ResNetPlusMultiLinear(num_blocks=resnet_block,
                                                          out_channels=num_values_per_attr)
@@ -254,41 +255,14 @@ def train_DDSM_resnets():
                         wandb_group='ddsm', wandb_extra_hyperparams={
                             'base': 'resnet', 'resnet_block': resnet_block})
     """
-    Selected hyperparams: resnet_block 3, lr 0.01, base_lr_factor 0.01, weight_decay 1e-5
-    MCC: 1.0 for training and validation.
-    Name of wandb run: glorious-serenity-174
+    Selected hyperparams: resnet_block 3, lr 0.1, base_lr_factor 0.001, weight_decay 0.01
+    MCC: 0.416  (0.583 ACC) in validation set
+    Name of wandb run: wobbly-vortex-168
     """
-
-# ended up not training these, resnet achieves 100% train/val accuracy
-# def train_DDSM_convnet():
-#     # Get dsets
-#     train_dset = datasets.DDSM('train', return_attributes=True)
-#     val_dset = datasets.DDSM('val', return_attributes=True)
-
-#     # Add transforms
-#     train_transform, val_transform = transforms.get_DDSM_transforms(
-#         train_dset.img_mean, train_dset.img_std)
-#     train_dset.transform = train_transform
-#     val_dset.transform = val_transform
-
-#     # Compute num_values_per_attr
-#     num_values_per_attr = train_dset.attributes.max(0) + 1
-
-#     # Set hyperparams
-#     for learning_rate in [1e-4, 1e-3, 1e-2, 1e-1]:
-#         for weight_decay in [0, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1]:
-#             # Define model
-#             model = models.ConvNetPlustMultiLinear(in_channels=1,
-#                                                    out_channels=num_values_per_attr)
-
-#             # Train
-#             finetune(model, train_dset, val_dset, learning_rate=learning_rate,
-#                      weight_decay=weight_decay, wandb_group='ddsm',
-#                      wandb_extra_hyperparams={'base': 'convnet'})
-
 
 def train_IAD_resnets():
-    """
+    """ Train IAD attribute predictors on a range of hyperparameters.
+    
     Note: I use 85% of the data for training and 15% as validation. I do not report 
     results in this dataset so I don't need a test set.
     """
@@ -310,9 +284,9 @@ def train_IAD_resnets():
 
     # Set hyperparams
     for resnet_block in range(1, 5):
-        for learning_rate in [1e-3, 1e-2, 1e-1, 1e0]:
-            for base_lr_factor in [0, 1e-4, 1e-3, 1e-2]:
-                for weight_decay in [0, 1e-5, 1e-3, 1e-1]:
+        for learning_rate in [1e-4, 1e-3, 1e-2, 1e-1]:
+            for base_lr_factor in [0, 1e-3, 1e-2, 1e-1]:
+                for weight_decay in [0, 1e-4, 1e-2, 1e-0]:
                     # Define model
                     model = models.ResNetPlusMultiLinear(num_blocks=resnet_block,
                                                          out_channels=num_values_per_attr)
@@ -324,38 +298,53 @@ def train_IAD_resnets():
                         wandb_group='iad', wandb_extra_hyperparams={
                             'base': 'resnet', 'resnet_block': resnet_block,
                             'full_augmentation': use_full_augmentations})
+    """
+    Selected hyperparams: resnet_block 3, lr 0.1, base_lr_factor 0.001, weight_decay 1e-4
+    MCC: 0.495 (0.746 ACC) in validation set.
+    Name of wandb run: smart-violet-439
+    """
 
-# ended up  not training these
-# def train_IAD_convnet():
-#     """
-#     Note: I use 85% of the data for training and 15% as validation. I do not report
-#     results in this dataset so I don't need a test set.
-#     """
-#     # Get dsets
-#     train_dset = datasets.IAD('train', return_attributes=True,
-#                               split_proportion=(0.85, 0.15))
-#     val_dset = datasets.IAD('val', return_attributes=True, split_proportion=(0.85, 0.15))
 
-#     # Add transforms
-#     use_full_augmentations = False
-#     train_transform, val_transform = transforms.get_IAD_transforms(
-#         train_dset.img_mean, train_dset.img_std,
-#         use_full_augmentations=use_full_augmentations)
-#     train_dset.transform = train_transform
-#     val_dset.transform = val_transform
+def get_DDSM_AbL(run_path='ecobost/dermosxai_abl/1fdjvoj1'):
+    """ Get a trained attribute predictor model from wandb.
+    
+    Arguments:
+        run_path (string): Wandb path for the desired model. Default value is the model
+            with best validation MCC.
+    
+    Returns: 
+        model (nn.Module): A ResNetPlusMultiLinear model.
+    """
+    return _get_pretrained_model(run_path, num_values_per_attr=[3, 5])
 
-#     # Compute num_values_per_attr
-#     num_values_per_attr = train_dset.attributes.max(0) + 1
 
-#     # Set hyperparams
-#     for learning_rate in [1e-4, 1e-3, 1e-2, 1e-1]:
-#         for weight_decay in [0, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1]:
-#             # Define model
-#             model = models.ConvNetPlustMultiLinear(in_channels=3,
-#                                                    out_channels=num_values_per_attr)
+def get_IAD_AbL(run_path='ecobost/dermosxai_abl/2e71tyda'):
+    """ Get a trained attribute predictor model from wandb.
+    
+    Arguments:
+        run_path (string): Wandb path for the desired model. Default value is the model
+            with best validation MCC.
+    
+    Returns: 
+        model (nn.Module): A ResNetPlusMultiLinear model.
+    """
+    return _get_pretrained_model(run_path,
+                                 num_values_per_attr=[8, 3, 3, 2, 4, 3, 5, 4, 3, 7])
 
-#             # Train
-#             finetune(
-#                 model, train_dset, val_dset, learning_rate=learning_rate,
-#                 weight_decay=weight_decay, wandb_group='iad', wandb_extra_hyperparams={
-#                     'base': 'convnet', 'full_augmentation': use_full_augmentations})
+
+def _get_pretrained_model(run_path, num_values_per_attr):
+    """ Downloads a model and loads the weights."""
+    run = wandb.Api().run(run_path)
+    file = run.file('model.pt').download('/tmp', replace=True)  # download the weights
+    model_path = file.name
+
+    # Set up model
+    resnet_block = run.config['resnet_block']
+    model = models.ResNetPlusMultiLinear(num_blocks=resnet_block,
+                                         out_channels=num_values_per_attr)
+
+    # Load up weights
+    model.load_state_dict(torch.load(model_path))
+    model.eval()
+
+    return model
