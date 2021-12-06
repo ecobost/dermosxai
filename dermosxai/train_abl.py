@@ -187,7 +187,7 @@ def finetune(model, train_dset, val_dset, seed=1, batch_size=64, learning_rate=0
             wandb.run.summary['best_val_mcc'] = best_mcc
             wandb.run.summary['best_val_acc'] = best_acc
             wandb.run.finish()
-            raise ('Validation loss diverged')
+            raise ValueError('Validation loss diverged')
         scheduler.step(val_mcc)
 
         # Save best model yet (if needed)
