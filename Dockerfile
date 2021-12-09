@@ -7,7 +7,8 @@ WORKDIR /src
 RUN apt update && apt upgrade -y
 
 # Install dependencies
-RUN pip install pandas scikit-learn h5py wandb
+RUN apt install -y build-essential && \
+    pip install scikit-learn h5py wandb shap
 
 # Install dermosxai
 ADD ./setup.py /src/dermosxai/setup.py
@@ -16,8 +17,7 @@ RUN pip install -e /src/dermosxai
 
 # Install extra libraries (non-essential but useful)
 RUN apt install -y python3-tk nano
-RUN pip install matplotlib jupyterlab ipympl seaborn pydicom scikit-image
-RUN pip uninstall jedi -y # jupyter autocompletions are broken with this: https://stackoverflow.com/questions/40536560/ipython-and-jupyter-autocomplete-not-working
+RUN pip install matplotlib jupyterlab ipympl seaborn pydicom pandas scikit-image
 
 # Clean apt lists
 RUN rm -rf /var/lib/apt/lists/*
