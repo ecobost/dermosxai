@@ -1,4 +1,5 @@
 """Training code for the attribute prediction network. """
+from dermosxai.data import get_HAM10000
 import torch
 from torch.utils import data
 from torch import optim
@@ -16,7 +17,7 @@ from dermosxai import models
 
 
 def finetune(model, train_dset, val_dset, seed=1, batch_size=64, learning_rate=0.01,
-             weight_decay=1e-5, num_epochs=200, decay_epochs=5, lr_decay=0.01,
+             weight_decay=1e-3, num_epochs=200, decay_epochs=4, lr_decay=0.1,
              stopping_epochs=20, base_lr_factor=0.01, wandb_group=None,
              wandb_extra_hyperparams={}):
     """  Train attribute prediction model with different learning rate for base and head.
@@ -241,9 +242,9 @@ def train_DDSM_resnets():
 
     # Set hyperparams
     for resnet_block in range(1, 5):
-        for learning_rate in [1e-3, 1e-2, 1e-1, 1e0]:
+        for learning_rate in [1e-3, 1e-2, 1e-1]:
             for base_lr_factor in [0, 1e-3, 1e-2, 1e-1]:
-                for weight_decay in [0, 1e-4, 1e-2, 1e0]:
+                for weight_decay in [0, 1e-4, 1e-2]:
                     # Define model
                     model = models.ResNetPlusMultiLinear(num_blocks=resnet_block,
                                                          out_channels=num_values_per_attr)
@@ -255,9 +256,9 @@ def train_DDSM_resnets():
                         wandb_group='ddsm', wandb_extra_hyperparams={
                             'base': 'resnet', 'resnet_block': resnet_block})
     """
-    Selected hyperparams: resnet_block 3, lr 0.1, base_lr_factor 0.001, weight_decay 0.01
-    MCC: 0.416  (0.583 ACC) in validation set
-    Name of wandb run: wobbly-vortex-168
+    Selected hyperparams: resnet_block 3, lr 0.01, base_lr_factor 0.01, weight_decay 0.01
+    MCC: 0.42  (0.607 ACC) in validation set
+    Name of wandb run: resilient-yogurt-606
     """
 
 def train_IAD_resnets():
@@ -284,9 +285,9 @@ def train_IAD_resnets():
 
     # Set hyperparams
     for resnet_block in range(1, 5):
-        for learning_rate in [1e-4, 1e-3, 1e-2, 1e-1]:
+        for learning_rate in [1e-3, 1e-2, 1e-1]:
             for base_lr_factor in [0, 1e-3, 1e-2, 1e-1]:
-                for weight_decay in [0, 1e-4, 1e-2, 1e-0]:
+                for weight_decay in [0, 1e-5, 1e-3]:
                     # Define model
                     model = models.ResNetPlusMultiLinear(num_blocks=resnet_block,
                                                          out_channels=num_values_per_attr)
@@ -299,13 +300,13 @@ def train_IAD_resnets():
                             'base': 'resnet', 'resnet_block': resnet_block,
                             'full_augmentation': use_full_augmentations})
     """
-    Selected hyperparams: resnet_block 3, lr 0.1, base_lr_factor 0.001, weight_decay 1e-4
-    MCC: 0.495 (0.746 ACC) in validation set.
-    Name of wandb run: smart-violet-439
+    Selected hyperparams: resnet_block 3, lr 0.01, base_lr_factor 0.01, weight_decay 1e-3
+    MCC: 0.487 (0.747 ACC) in validation set.
+    Name of wandb run: glamorous-wave-750
     """
 
 
-def get_DDSM_AbL(run_path='ecobost/dermosxai_abl/1fdjvoj1'):
+def get_DDSM_AbL(run_path='ecobost/dermosxai_abl/2yeaq4ie'):
     """ Get a trained attribute predictor model from wandb.
     
     Arguments:
@@ -318,7 +319,7 @@ def get_DDSM_AbL(run_path='ecobost/dermosxai_abl/1fdjvoj1'):
     return _get_pretrained_model(run_path, num_values_per_attr=[3, 5])
 
 
-def get_IAD_AbL(run_path='ecobost/dermosxai_abl/2e71tyda'):
+def get_IAD_AbL(run_path='ecobost/dermosxai_abl/rij9tlg4'):
     """ Get a trained attribute predictor model from wandb.
     
     Arguments:
@@ -330,6 +331,8 @@ def get_IAD_AbL(run_path='ecobost/dermosxai_abl/2e71tyda'):
     """
     return _get_pretrained_model(run_path,
                                  num_values_per_attr=[8, 3, 3, 2, 4, 3, 5, 4, 3, 7])
+
+get_HAM10000_AbL = get_IAD_AbL # just for convenience
 
 
 def _get_pretrained_model(run_path, num_values_per_attr):
