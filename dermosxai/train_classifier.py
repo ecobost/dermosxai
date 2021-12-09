@@ -705,42 +705,151 @@ if __name__ == '__main__':
     eval_HAM10000_linear_on_human()
     eval_HAM10000_linear_on_joint()
 
-    """
+"""
 Test metrics (resnet, DDSM): [0.72727273 0.44052187 0.44359055 0.67206478 0.78299092 0.72841511]
+Test metrics (human, DDSM): [0.74074074 0.45628967 0.45639209 0.6695279  0.80807453 0.73024843]
+Test metrics (joint, DDSM): [0.68686869 0.34539637 0.34561048 0.60425532 0.73884376 0.66322116]
 Test metrics (resnet, HAM10000): [0.87411598 0.67191378 0.67273709 0.7323828  0.94910305 0.77070733]
-Test metrics (human, DDSM): [0.71043771 0.32738189 0.36735279 0.5        0.77324415 0.69515107]
-Test metrics (human, HAM10000): [0.80622348 0.38440859 0.41588113 0.48340954 0.86031792 0.56224393]
-Test metrics (joint, DDSM): [0.68686869 0.34121211 0.34122067 0.5974026  0.70740564 0.62696349]
-Test metrics (joint, HAM10000): [0.8698727  0.66253684 0.66313969 0.72978163 0.94974833 0.77574644]
+Test metrics (human, HAM10000): [0.78925035 0.3352286  0.3610032  0.4917989  0.8627192  0.55125827]
+Test metrics (joint, HAM10000): [0.85148515 0.62600131 0.62618153 0.70036548 0.9366731  0.74395133]
 """
 
-def compute_mi():
-    #TODO: Compute MI between human attributes and resnet features.
-    # perhaps compute the mI with all resnet layers.
-    pass
-"""
-train_f, val_f = train_features[30], val_features[30] # 30 is resnet layer
+def compute_DDSM_joint_MI():
+    """Computes mutual information between resnet features and predicted DDSM attributes."""
+    import torch
+    from torch import nn
 
-# Transform data into tensors
-train_attrs = torch.tensor(train_attrs, dtype=torch.float32)
-val_attrs = torch.tensor(val_attrs, dtype=torch.float32)
-train_f = torch.tensor(train_f, dtype=torch.float32)
-val_f = torch.tensor(val_f, dtype=torch.float32)
+    # Load test set
+    train_dset = datasets.DDSM('train')
+    val_dset = datasets.DDSM('val')
+    test_dset = datasets.DDSM('test')
 
-# Normalize features
-train_mean, train_std = train_f.mean(0), train_f.std(0)
-train_f = (train_f - train_mean) / (train_std + 1e-7)
-val_f = (val_f - train_mean) / (train_std + 1e-7)
+    # Add transforms
+    _, val_transform = transforms.get_DDSM_transforms(train_dset.img_mean,
+                                                      train_dset.img_std, make_rgb=True)
+    train_dset.transform = val_transform
+    val_dset.transform = val_transform
+    test_dset.transform = val_transform
 
+    # Get attribute learner
+    abl_model = train_abl.get_DDSM_AbL()
+    abl_model = nn.Sequential(abl_model, models.SoftmaxPlusConcat())
+    abl_model.eval()
 
+    # Get features
+    train_human_features = extract_features(abl_model, train_dset)
+    val_human_features = extract_features(abl_model, val_dset)
+    test_human_features = extract_features(abl_model, test_dset)
 
-mi_estimator, dvs, dv_losses, jsds, infonces, val_dvs, val_dv_losses, val_jsds, val_infonces = mi.train_mi(train_f, train_attrs, val_f, val_attrs)
+    # Find the best resnet_layer
+    h5_path = path.join(DDSM_dir, 'linear_on_joint.h5')
+    _, _, (resnet_block, _) = _find_best_resnet_model(h5_path)
 
+    # Get resnet
+    resnet = models.ResNetBase(num_blocks=resnet_block, pretrained=True)
+    resnet.eval()
 
+    # Get resnet features
+    train_resnet_features = extract_features(resnet, train_dset)
+    val_resnet_features = extract_features(resnet, val_dset)
+    test_resnet_features = extract_features(resnet, test_dset)
 
-    # Save best
+    # Normalize
+    train_mean = train_resnet_features.mean(0)
+    train_std = train_resnet_features.std(0)
+    train_resnet_features = (train_resnet_features - train_mean) / train_std
+    val_resnet_features = (val_resnet_features - train_mean) / train_std
+    test_resnet_features = (test_resnet_features - train_mean) / train_std
+
+    # Make them tensors
+    train_human_features = torch.tensor(train_human_features)
+    val_human_features = torch.tensor(val_human_features)
+    test_human_features = torch.tensor(test_human_features)
+    train_resnet_features = torch.tensor(train_resnet_features)
+    val_resnet_features = torch.tensor(val_resnet_features)
+    test_resnet_features = torch.tensor(test_resnet_features)
+
+    # Train MI estimator
+    from dermosxai import mi
+    mi_estimator = mi.train_mi(train_human_features, train_resnet_features,
+                               val_human_features, val_resnet_features)[0]
+
+    # Compute MI
     mi_estimator.eval()
     with torch.no_grad():
-        print(mi_estimator(val_f, val_attrs)) # dv, dv_loss, jsd, infonce
-    mi_estimator.train();
+        dv, _, jsd, infonce = mi_estimator(test_human_features, test_resnet_features)
+
+    print('Test MI (DDSM): ', dv.item(), jsd.item(), infonce.item())
+
+
+def compute_HAM10000_joint_MI():
+    """Computes mutual information between resnet features and predicted DDSM attributes."""
+    import torch
+    from torch import nn
+
+    # Load test set
+    train_dset = datasets.HAM10000('train')
+    val_dset = datasets.HAM10000('val')
+    test_dset = datasets.HAM10000('test')
+
+    # Add transforms
+    _, val_transform = transforms.get_HAM10000_transforms(train_dset.img_mean,
+                                                          train_dset.img_std)
+    train_dset.transform = val_transform
+    val_dset.transform = val_transform
+    test_dset.transform = val_transform
+
+    # Get attribute learner
+    abl_model = train_abl.get_HAM10000_AbL()
+    abl_model = nn.Sequential(abl_model, models.SoftmaxPlusConcat())
+    abl_model.eval()
+
+    # Get features
+    train_human_features = extract_features(abl_model, train_dset)
+    val_human_features = extract_features(abl_model, val_dset)
+    test_human_features = extract_features(abl_model, test_dset)
+
+    # Find the best resnet_layer
+    h5_path = path.join(HAM10000_dir, 'linear_on_joint.h5')
+    _, _, (resnet_block, _) = _find_best_resnet_model(h5_path)
+
+    # Get resnet
+    resnet = models.ResNetBase(num_blocks=resnet_block, pretrained=True)
+    resnet.eval()
+
+    # Get resnet features
+    train_resnet_features = extract_features(resnet, train_dset)
+    val_resnet_features = extract_features(resnet, val_dset)
+    test_resnet_features = extract_features(resnet, test_dset)
+
+    # Normalize
+    train_mean = train_resnet_features.mean(0)
+    train_std = train_resnet_features.std(0)
+    train_resnet_features = (train_resnet_features - train_mean) / train_std
+    val_resnet_features = (val_resnet_features - train_mean) / train_std
+    test_resnet_features = (test_resnet_features - train_mean) / train_std
+
+    # Make them tensors
+    train_human_features = torch.tensor(train_human_features)
+    val_human_features = torch.tensor(val_human_features)
+    test_human_features = torch.tensor(test_human_features)
+    train_resnet_features = torch.tensor(train_resnet_features)
+    val_resnet_features = torch.tensor(val_resnet_features)
+    test_resnet_features = torch.tensor(test_resnet_features)
+
+    # Train MI estimator
+    from dermosxai import mi
+    mi_estimator = mi.train_mi(train_human_features, train_resnet_features,
+                               val_human_features, val_resnet_features)[0]
+
+    # Compute MI
+    mi_estimator.eval()
+    with torch.no_grad():
+        dv, _, jsd, infonce = mi_estimator(test_human_features, test_resnet_features)
+
+    print('Test MI (HAM10000): ', dv.item(), jsd.item(), infonce.item())
+
+"""
+Test MI (DDSM):  0.31409886479377747 -1.252334713935852 -5.379660129547119
+Test MI (HAM10000):  3.1195478439331055 -0.5205932855606079 -3.4473540782928467
 """
