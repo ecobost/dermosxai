@@ -1,6 +1,5 @@
 services:
   notebook:
-    runtime: nvidia
     image: ecobost/dermosxai
     ports:
       - "7777:8888"
@@ -8,7 +7,7 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix # for X-forwarding
       - /tmp:/tmp
       - .:/src/dermosxai
-#      - /media/ecobos/Mike2/manifest-ZkhPvrLo5216730872708713142/CBIS-DDSM:/mammograms
+#      - /media/ecobos/Mike/manifest-ZkhPvrLo5216730872708713142/CBIS-DDSM:/mammograms
 #      - /media/ecobos/Mike/manifest-1622561851074:/lung_cts
     environment:
       - DISPLAY=$DISPLAY
@@ -20,10 +19,14 @@ services:
       - --NotebookApp.token=''
       - --no-browser
     working_dir: /src/dermosxai
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
     ipc: host # needed for multiprocessing (dataloader) in pytorch
 
   bash:
-    runtime: nvidia
     image: ecobost/dermosxai
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix # for X-forwarding
@@ -33,5 +36,10 @@ services:
       - DISPLAY=$DISPLAY
     entrypoint: /bin/bash
     working_dir: /src/dermosxai
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
     ipc: host # needed for multiprocessing (dataloader) in pytorch
 #    user: "7610:1040" # uid:groupid, can't be automated because docker-compose can't run bash commands (so i can't do something like $(id -u):$(id -g)
