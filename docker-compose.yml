@@ -16,7 +16,7 @@ services:
       - lab
       - --ip=0.0.0.0
       - --allow-root
-      - --NotebookApp.token=''
+      - --ServerApp.token=''
       - --no-browser
     working_dir: /src/dermosxai
     deploy:
