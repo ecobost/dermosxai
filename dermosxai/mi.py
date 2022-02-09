@@ -44,7 +44,6 @@ class MLP(nn.Module):
                 nn.init.normal_(module.weight, mean=1, std=0.1)
                 nn.init.constant_(module.bias, 0)
 
-
 class MIEstimator(nn.Module):
     """ Uses a MLP to estimate mutual information between two sets of variables.
     
