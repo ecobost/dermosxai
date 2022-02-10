@@ -85,7 +85,7 @@ def train(decoder='transposed', seed=19, batch_size=64, learning_rate=0.001, wei
         'stopping_epochs': stopping_epochs, 'loss_function': loss_function,
         'beta_weight': beta_weight, 'augmentation': augmentation}
     wandb.init(project='dermosxai_vae', group='ham10K-only', config=hyperparams,
-               dir='/src/dermosxai/data/dermosxai_vae', tags=['tcvae'])
+               dir='/src/dermosxai/data', tags=['tcvae'])
 
     # Set random seed
     torch.manual_seed(seed)

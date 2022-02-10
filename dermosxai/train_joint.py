@@ -120,7 +120,7 @@ def train_joint_with_mi(model, train_dset, val_dset, seed=54321, batch_size=96,
         'stopping_epochs': stopping_epochs, 'base_lr_factor': base_lr_factor,
         'mi_patience': mi_patience, **wandb_extra_hyperparams}
     wandb.init(project='dermosxai_joint', group=wandb_group, config=hyperparams,
-               dir='/src/dermosxai/data/dermosxai_joint')
+               dir='/src/dermosxai/data')
 
     # Set random seed
     torch.manual_seed(seed)
