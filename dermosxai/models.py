@@ -3,6 +3,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
+
 def init_conv(modules, is_transposed=False):
     """ Initializes all module weights using He initialization and set biases to zero.
     
@@ -527,6 +528,8 @@ class MultiLinearHead(nn.Module):
         linear_layers = [nn.Linear(in_channels, oc) for oc in out_channels]
         self.linear_layers = nn.ModuleList(linear_layers)
 
+        self.out_channels = out_channels
+
     def init_parameters(self):
         init_conv(self.linear_layers)
 
@@ -548,6 +551,7 @@ class ResNetPlusMultiLinear(nn.Module):
         self.base = ResNetBase(num_blocks, pretrained=pretrained_resnet)
         self.head = MultiLinearHead(in_channels=self.base.out_channels,
                                     out_channels=out_channels)
+        self.out_channels = out_channels
 
     def forward(self, x):
         x_feats = self.base(x)
@@ -559,6 +563,18 @@ class ResNetPlusMultiLinear(nn.Module):
         self.head.init_parameters()
 
 
+class SoftmaxPlusConcat(nn.Module):
+    """ Helper module that takes the output of a multilinear head, applies a softmax to 
+    each output and concatenates them to create a feature vector of probs.
+    
+    Input: List of N x d_i batches of logits.
+    Output: N x sum_i(d_i) batch with concatenated probs.
+    """
+    def forward(self, x):
+        probs = [F.softmax(x_i, -1) for x_i in x]
+        return torch.cat(probs, -1)
+
+
 class ConvNetBase(nn.Module):
     """ A small convnet architecture to work as a feature extractor.
     
@@ -566,32 +582,45 @@ class ConvNetBase(nn.Module):
         in_channels (int): Expected input channels in the image.
         out_channels (int): Desired output channels
     """
-    def __init__(self, in_channels, out_channels=64):
+    def __init__(self, in_channels=3, out_channels=128):
         super().__init__()
 
         # Create layers
         layers = [
-            nn.Conv2d(in_channels, 16, kernel_size=4, stride=2, padding=1,
+            nn.Conv2d(in_channels, 16, kernel_size=7, stride=2, padding=3,
                       padding_mode='reflect', bias=False),
             nn.BatchNorm2d(16),
             nn.ReLU(inplace=True),
-            nn.Conv2d(16, 16, kernel_size=4, stride=2, padding=1, padding_mode='reflect',
-                      bias=False),
-            nn.BatchNorm2d(16),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(16, 32, kernel_size=4, stride=2, padding=1, padding_mode='reflect',
+            nn.Conv2d(16, 32, kernel_size=3, padding=1, padding_mode='reflect',
                       bias=False),
             nn.BatchNorm2d(32),
             nn.ReLU(inplace=True),
-            nn.Conv2d(32, 32, kernel_size=4, stride=2, padding=1, padding_mode='reflect',
+            nn.Conv2d(32, 32, kernel_size=3, stride=2, padding=1, padding_mode='reflect',
                       bias=False),
             nn.BatchNorm2d(32),
             nn.ReLU(inplace=True),
-            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=1, padding_mode='reflect',
+            nn.Conv2d(32, 64, kernel_size=3, padding=1, padding_mode='reflect',
                       bias=False),
             nn.BatchNorm2d(64),
             nn.ReLU(inplace=True),
-            nn.Conv2d(64, out_channels, kernel_size=4, bias=False),
+            nn.Conv2d(64, 64, kernel_size=3, stride=2, padding=1, padding_mode='reflect',
+                      bias=False),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 96, kernel_size=3, padding=1, padding_mode='reflect',
+                      bias=False),
+            nn.BatchNorm2d(96),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(96, 96, kernel_size=3, stride=2, padding=1, padding_mode='reflect',
+                      bias=False),
+            nn.BatchNorm2d(96),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(96, 128, kernel_size=3, padding=1, padding_mode='reflect',
+                      bias=False),
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(128, out_channels, kernel_size=3, stride=2, padding=1,
+                      padding_mode='reflect', bias=False),
             nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True), ]
         self.layers = nn.Sequential(*layers)
@@ -605,24 +634,47 @@ class ConvNetBase(nn.Module):
         init_bn(m for m in self.layers if isinstance(m, nn.BatchNorm2d))
 
 
-class ConvNetPlusMultiLinear(nn.Module):
-    """ Small convnet for feature extraction and a multi-linear readout.
+class JointWithLinearHead(nn.Module):
+    """ Classifier with three components: a human attribute predictor, a feature extractor
+    and a linear readout. 
+    
+    Attribute predictions are concatenated with the extracted image features and send 
+    through a linear layer to obtain the predicted class.
     
     Arguments:
-        in_channels (int): Number of channels in the input image
-        out_channels (list of int): Number of outputs for each linear readout.
+        abl (nn.Module): Attribute learner model: predicts a list of logits per attribute.
+        extractor (nn.Module): Feature extractor: produces image features (N x C x H x W).
+        out_channels (int): Number of output channels to produce.
     """
-    def __init__(self, in_channels, out_channels):
+    def __init__(self, abl, extractor, out_channels):
         super().__init__()
-        self.base = ConvNetBase(in_channels)
-        self.head = MultiLinearHead(in_channels=self.base.out_channels,
-                                    out_channels=out_channels)
+        self.abl = abl
+        self.extractor = extractor  # a convnet or resnet
+
+        self.linear_human = nn.Linear(in_features=sum(abl.out_channels),
+                                      out_features=out_channels)
+        self.linear_convnet = nn.Linear(in_features=extractor.out_channels,
+                                        out_features=out_channels, bias=False)
+        self.out_channels = out_channels
 
     def forward(self, x):
-        x_feats = self.base(x)
-        out = self.head(x_feats)
+        # Get human attributes
+        logits_per_attr = self.abl(x)
+        self.human_features = torch.cat([F.softmax(lgt, -1) for lgt in logits_per_attr],
+                                        dim=-1)
+
+        # Get image features
+        self.convnet_features = torch.mean(self.extractor(x), dim=(-1, -2))
+
+        # Apply linear on top
+        out = self.linear_human(self.human_features) + self.linear_convnet(
+            self.convnet_features)
+
         return out
 
-    def init_parameters(self):
-        self.base.init_parameters()
-        self.head.init_parameters()
+    def init_parameters(self, init_abl=False, init_extractor=True):
+        if init_abl:
+            self.abl.init_parameters()
+        if init_extractor:
+            self.extractor.init_parameters()
+        init_conv([self.linear_human, self.linear_convnet])
