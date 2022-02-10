@@ -1,9 +1,9 @@
 """ Interface to our imaging data. Loads and returns data in a standard format."""
-import h5py
 from os import path
+
+import h5py
 import numpy as np
 import pandas as pd
-
 
 # Set some important directories
 base_dir = '/src/dermosxai/data'

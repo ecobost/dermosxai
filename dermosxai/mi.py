@@ -2,6 +2,7 @@
 import torch
 from torch import nn
 from torch.nn import functional as F
+
 from dermosxai import utils
 
 
@@ -156,11 +157,12 @@ def train_mi(train_x, train_y, val_x, val_y, mi_version='mine', batch_size=96, s
     Note: 
         This method uses the data as is. Make sure to normalize it before sending it here.
     """
-    from torch.utils import data
-    from torch import optim
-    from torch.optim import lr_scheduler
     import copy
     import time
+
+    from torch import optim
+    from torch.optim import lr_scheduler
+    from torch.utils import data
 
     # Get datasets
     train_dset = data.TensorDataset(train_x, train_y)

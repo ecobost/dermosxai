@@ -1,13 +1,10 @@
 """ Code to train diagnosis classification models. """
-from dermosxai import datasets
-from dermosxai import transforms
-from dermosxai import utils
-from dermosxai import models
-from dermosxai import train_abl
-
-import numpy as np
-import h5py
 from os import path
+
+import h5py
+import numpy as np
+
+from dermosxai import datasets, models, train_abl, transforms, utils
 
 # Set directory to save results
 DDSM_dir = '/src/dermosxai/data/DDSM/classifiers'
@@ -30,9 +27,9 @@ def train_linear(X, y, wds=np.logspace(-4, 4, 17)):
             for each regularization weight.
         biases (np.array): A num_regs x num_classes array with the biases.
     """
-    from sklearn import linear_model
-    from sklearn import exceptions
     import warnings
+
+    from sklearn import exceptions, linear_model
 
     weights = []
     biases = []

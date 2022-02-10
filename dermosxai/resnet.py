@@ -1,12 +1,13 @@
 """ Some experiments using the intermedate features from a ResNet network"""
-from dermosxai import datasets
-from torchvision import transforms
-from torch.utils import data
-from torchvision import models
+import h5py
+import numpy as np
 import torch
 from torch import nn
-import numpy as np
-import h5py
+from torch.utils import data
+from torchvision import models, transforms
+
+from dermosxai import datasets
+
 
 def _get_intermediate_features(resnet, input_):
     """ Receives a ResNet50 network and a valid input and extracts intermediate features.

@@ -1,19 +1,17 @@
 """Training code for the attribute prediction network. """
-from dermosxai.data import get_HAM10000
-import torch
-from torch.utils import data
-from torch import optim
-from torch.optim import lr_scheduler
-from torch.nn import functional as F
 import copy
 import time
-import wandb
 from os import path
 
-from dermosxai import utils
-from dermosxai import datasets
-from dermosxai import transforms
-from dermosxai import models
+import torch
+import wandb
+from torch import optim
+from torch.nn import functional as F
+from torch.optim import lr_scheduler
+from torch.utils import data
+
+from dermosxai import datasets, models, transforms, utils
+from dermosxai.data import get_HAM10000
 
 
 def finetune(model, train_dset, val_dset, seed=1, batch_size=64, learning_rate=0.01,

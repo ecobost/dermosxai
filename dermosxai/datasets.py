@@ -1,9 +1,8 @@
 """ Pytorch datasets. """
-from torch.utils import data as pt_data
 import numpy as np
+from torch.utils import data as pt_data
 
-from dermosxai import data
-from dermosxai import utils
+from dermosxai import data, utils
 
 
 class IAD(pt_data.Dataset):
