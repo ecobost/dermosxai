@@ -58,7 +58,7 @@ def finetune(model, train_dset, val_dset, seed=1, batch_size=64, learning_rate=0
         'stopping_epochs': stopping_epochs, 'base_lr_factor': base_lr_factor,
         **wandb_extra_hyperparams}
     wandb.init(project='dermosxai_abl', group=wandb_group, config=hyperparams,
-               dir='/src/dermosxai/data')
+               dir='/src/dermosxai/data/dermosxai_abl')
 
     # Set random seed
     torch.manual_seed(seed)

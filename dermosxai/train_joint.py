@@ -120,7 +120,7 @@ def train_joint_with_mi(model, train_dset, val_dset, seed=54321, batch_size=96,
         'stopping_epochs': stopping_epochs, 'base_lr_factor': base_lr_factor,
         'mi_patience': mi_patience, **wandb_extra_hyperparams}
     wandb.init(project='dermosxai_joint', group=wandb_group, config=hyperparams,
-               dir='/src/dermosxai/data')
+               dir='/src/dermosxai/data/dermosxai_joint')
 
     # Set random seed
     torch.manual_seed(seed)
@@ -404,7 +404,7 @@ def train_HAM10000():
                                         base_lr_factor=base_lr_factor,
                                         wandb_group='ham10000',
                                         wandb_extra_hyperparams={'base': 'resnet'})
-                except ValueError:  # convergence error
+                except ValueError:  # ignore convergence error
                     pass
 
                 try:
@@ -414,9 +414,8 @@ def train_HAM10000():
                                         base_lr_factor=base_lr_factor,
                                         wandb_group='ham10000', human_only_epochs=5,
                                         wandb_extra_hyperparams={'base': 'resnet'})
-                except ValueError:  # convergence error
+                except ValueError:  # ignore convergence error
                     pass
-
 
                 try:
                     train_joint_with_mi(copy.deepcopy(model), train_dset, val_dset,
@@ -425,7 +424,7 @@ def train_HAM10000():
                                         base_lr_factor=base_lr_factor,
                                         wandb_group='ham10000', mi_patience=5,
                                         wandb_extra_hyperparams={'base': 'resnet'})
-                except ValueError:  # convergence error
+                except ValueError:  # ignore convergence error
                     pass
 
 
