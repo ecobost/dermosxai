@@ -140,7 +140,7 @@ def train_joint_with_mi(model, train_dset, val_dset, seed=54321, batch_size=96,
     model.abl.eval()  # make sure the ABL is always in eval mode
     model.cuda()
 
-    # Set the abl requires_grad to False (to avoid computing those gradients)
+    # Set the abl requires_grad to False (optional, to avoid computing those gradients)
     for param in model.abl.parameters():
         param.requires_grad = False
 
@@ -189,10 +189,10 @@ def train_joint_with_mi(model, train_dset, val_dset, seed=54321, batch_size=96,
 
             # Compute loss
             nll = F.cross_entropy(logits, labels.cuda())
-            mi_estimator.train()
+            mi_estimator.eval()
             dv_mi, dv_loss, jsd_mi, infonce_mi = mi_estimator(model.human_features,
                                                               model.convnet_features)
-            mi_estimator.eval()
+            mi_estimator.train()
 
             if epoch <= mi_patience:
                 loss = nll
@@ -427,6 +427,56 @@ def train_HAM10000():
                 except ValueError:  # ignore convergence error
                     pass
 
+
+def get_HAM10000_joint_model(wandb_path='ldldld'):
+    """ Loads a joint model from wandb and returns it"""
+    pass
+    #return model, mi_estimator
+
+
+def evaluate_HAM10000(wandb_path=''):
+    """ Computes the evaluaton  metrics (and MI) in the test set."""
+    pass
+    # # Get data
+    # train_dset = datasets.DDSM('train')
+    # test_dset = datasets.DDSM('test')
+
+    # # Get transforms
+    # _, test_transform = transforms.get_DDSM_transforms(train_dset.img_mean,
+    #                                                    train_dset.img_std, make_rgb=True)
+    # test_dset.transform = test_transform
+
+    # # Get dloader
+    # dloader = data.DataLoader(test_dset, batch_size=128, num_workers=4)
+
+    # # Get model
+    # model, mi_estimator = get_DDSM_joint_model(wandb_path)
+    # model.cuda()
+    # model.eval()
+    # mi_estimator.cuda()
+    # mi_estimator.eval()
+
+    # # Pass through model
+    # logits = []
+    # labels = []
+    # human_features = []
+    # convnet_features = []
+    # for images, labels_ in dloader:
+    #     logits.append(model(images.cuda()).detach().cpu())
+    #     human_features.append(model.human_features.detach())
+    #     convnet_features.append(model.convnet_features.detach())
+    #     labels.append(labels_.detach().cpu())
+    # logits = torch.cat(logits)
+    # human_features = torch.cat(human_features)
+    # convnet_features = torch.cat(convnet_features)
+    # labels = torch.cat(labels)
+
+    # # Compute MI
+    # print('MI estimates (DDSM);', mi_estimator(human_features, convnet_features))
+
+    # # Compute metrics
+    # probs = F.softmax(logits, dim=-1).cpu().numpy()
+    # print('Metrics (DDSM)', utils.compute_metrics(probs, labels.numpy()))
 
 def train_DDSM():
     # Get dsets
