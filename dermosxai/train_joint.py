@@ -428,10 +428,35 @@ def train_HAM10000():
                     pass
 
 
-def get_HAM10000_joint_model(wandb_path='ldldld'):
-    """ Loads a joint model from wandb and returns it"""
-    pass
-    #return model, mi_estimator
+def get_HAM10000_joint_model(wandb_path):
+    """ Downloads pretrained weights from wandb and loads model.
+    
+    Arguments:
+        wandb_path (str): Name of the run as recorded by wandb usually something like 
+            "username/project_name/run_id".
+                   
+    Returns:
+        model (nn.Module): A JointWithLinearHead model with the pretrained weights.
+    """
+    utils.log('Setting up model...')
+    num_classes = 4  # datasets.HAM10000('train').labels.max() + 1
+    abl_model = train_abl.get_HAM10000_AbL()
+    extractor = models.ResNetBase(num_blocks=3)
+    model = models.JointWithLinearHead(abl_model, extractor, out_channels=num_classes)
+
+    # Get model from wandb
+    model_path = wandb.restore('model.pt', run_path=wandb_path, replace=True,
+                               root='/tmp').name  # downloads weights
+    model.load_state_dict(torch.load(model_path))
+
+    # # Get MI estimator too 
+    # mi_estimator = mi.MIEstimator(
+    #     (sum(model.abl.out_channels), model.extractor.out_channels))
+    # estimator_path = wandb.restore('estimator.pt', run_path=wandb_path, replace=True,
+    #                                root='/tmp').name  # downloads weights
+    # mi_estimator.load_state_dict(torch.load(estimator_path))
+
+    return model#, mi_estimator
 
 
 def evaluate_HAM10000(wandb_path=''):
