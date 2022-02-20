@@ -437,6 +437,8 @@ def get_HAM10000_joint_model(wandb_path):
                    
     Returns:
         model (nn.Module): A JointWithLinearHead model with the pretrained weights.
+        mi_estimator (nn.Module): The pretrained MIEstimator for human and convnet 
+            features outputted by the model.
     """
     utils.log('Setting up model...')
     num_classes = 4  # datasets.HAM10000('train').labels.max() + 1
@@ -449,59 +451,66 @@ def get_HAM10000_joint_model(wandb_path):
                                root='/tmp').name  # downloads weights
     model.load_state_dict(torch.load(model_path))
 
-    # # Get MI estimator too 
-    # mi_estimator = mi.MIEstimator(
-    #     (sum(model.abl.out_channels), model.extractor.out_channels))
-    # estimator_path = wandb.restore('estimator.pt', run_path=wandb_path, replace=True,
-    #                                root='/tmp').name  # downloads weights
-    # mi_estimator.load_state_dict(torch.load(estimator_path))
+    # Get MI estimator too 
+    mi_estimator = mi.MIEstimator(
+        (sum(model.abl.out_channels), model.extractor.out_channels))
+    estimator_path = wandb.restore('estimator.pt', run_path=wandb_path, replace=True,
+                                   root='/tmp').name
+    mi_estimator.load_state_dict(torch.load(estimator_path))
 
-    return model#, mi_estimator
+    return model, mi_estimator
 
 
-def evaluate_HAM10000(wandb_path=''):
-    """ Computes the evaluaton  metrics (and MI) in the test set."""
-    pass
-    # # Get data
-    # train_dset = datasets.DDSM('train')
-    # test_dset = datasets.DDSM('test')
+def evaluate_HAM10000(wandb_path=):
+    """ Computes the evaluaton metrics (and MI) in the test set.
+    
+    Arguments:
+        wandb_path (str): Name of the run as recorded by wandb usually something like 
+            "username/project_name/run_id".
+    """
+    # Get data
+    train_dset = datasets.HAM10000('train')
+    test_dset = datasets.HAM10000('test')
 
-    # # Get transforms
-    # _, test_transform = transforms.get_DDSM_transforms(train_dset.img_mean,
-    #                                                    train_dset.img_std, make_rgb=True)
-    # test_dset.transform = test_transform
+    # Get transforms
+    _, test_transform = transforms.get_HAM10000_transforms(train_dset.img_mean,
+                                                       train_dset.img_std)
+    test_dset.transform = test_transform
 
-    # # Get dloader
-    # dloader = data.DataLoader(test_dset, batch_size=128, num_workers=4)
+    # Get dloader
+    dloader = data.DataLoader(test_dset, batch_size=128, num_workers=4)
 
     # # Get model
-    # model, mi_estimator = get_DDSM_joint_model(wandb_path)
-    # model.cuda()
-    # model.eval()
-    # mi_estimator.cuda()
-    # mi_estimator.eval()
+    model, mi_estimator = get_HAM10000_joint_model(wandb_path)
+    model.cuda()
+    model.eval()
+    mi_estimator.cuda()
+    mi_estimator.eval()
 
-    # # Pass through model
-    # logits = []
-    # labels = []
-    # human_features = []
-    # convnet_features = []
-    # for images, labels_ in dloader:
-    #     logits.append(model(images.cuda()).detach().cpu())
-    #     human_features.append(model.human_features.detach())
-    #     convnet_features.append(model.convnet_features.detach())
-    #     labels.append(labels_.detach().cpu())
-    # logits = torch.cat(logits)
-    # human_features = torch.cat(human_features)
-    # convnet_features = torch.cat(convnet_features)
-    # labels = torch.cat(labels)
+    # Pass through model
+    logits = []
+    labels = []
+    human_features = []
+    convnet_features = []
+    with torch.no_grad():
+        for images, labels_ in dloader:
+            logits.append(model(images.cuda()).cpu())
+            human_features.append(model.human_features.cpu())
+            convnet_features.append(model.convnet_features.cpu())
+            labels.append(labels_.cpu())
+    logits = torch.cat(logits)
+    human_features = torch.cat(human_features)
+    convnet_features = torch.cat(convnet_features)
+    labels = torch.cat(labels)
+    
+    # Compute metrics
+    probs = F.softmax(logits, dim=-1).cpu().numpy()
+    print('Metrics (HAM10000)', utils.compute_metrics(probs, labels.numpy()))
+    
+    # Compute MI
+    print('MI estimates (HAM10000);', mi_estimator(human_features, convnet_features))
 
-    # # Compute MI
-    # print('MI estimates (DDSM);', mi_estimator(human_features, convnet_features))
-
-    # # Compute metrics
-    # probs = F.softmax(logits, dim=-1).cpu().numpy()
-    # print('Metrics (DDSM)', utils.compute_metrics(probs, labels.numpy()))
+    
 
 def train_DDSM():
     # Get dsets
