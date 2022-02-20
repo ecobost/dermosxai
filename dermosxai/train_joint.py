@@ -461,7 +461,7 @@ def get_HAM10000_joint_model(wandb_path):
     return model, mi_estimator
 
 
-def evaluate_HAM10000(wandb_path=):
+def evaluate_HAM10000(wandb_path):
     """ Computes the evaluaton metrics (and MI) in the test set.
     
     Arguments:
