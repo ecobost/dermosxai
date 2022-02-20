@@ -126,7 +126,7 @@ class MIEstimator(nn.Module):
 
 def train_mi(train_x, train_y, val_x, val_y, mi_version='mine', batch_size=96, seed=4321,
              learning_rate=0.001, weight_decay=0, decay_epochs=10, lr_decay=-0.1,
-             num_epochs=300, stopping_epochs=30):
+             num_epochs=300, stopping_epochs=30, device='cuda'):
     """ Train an MI estimator for the provided data.
     
     Arguments:
@@ -148,6 +148,7 @@ def train_mi(train_x, train_y, val_x, val_y, mi_version='mine', batch_size=96, s
         num_epochs (int): Maximum number of epochs.
         stopping_epochs (int): Stop training after this number of epochs without 
             improvement.
+        device (torch.device or str): Where to run the training.
     
     Returns:
         best_model (MIEstimator): Best Mi estimator.
@@ -178,7 +179,7 @@ def train_mi(train_x, train_y, val_x, val_y, mi_version='mine', batch_size=96, s
     model = MIEstimator((train_x.shape[-1], train_y.shape[-1]))
     model.init_parameters()
     model.train()
-    model.cuda()
+    model.to(device)
 
     # Declare optimizer
     optimizer = optim.Adam(model.parameters(), lr=learning_rate,
@@ -211,7 +212,7 @@ def train_mi(train_x, train_y, val_x, val_y, mi_version='mine', batch_size=96, s
             model.zero_grad()
 
             # Forward
-            dv, dv_loss, jsd, infonce = model(x.cuda(), y.cuda())
+            dv, dv_loss, jsd, infonce = model(x.to(device), y.to(device))
             if mi_version == 'mine':
                 loss = -dv_loss
             elif mi_version == 'jsd':
@@ -238,7 +239,8 @@ def train_mi(train_x, train_y, val_x, val_y, mi_version='mine', batch_size=96, s
         # Compute loss on validation set
         model.eval()
         with torch.no_grad():
-            val_dv, val_dv_loss, val_jsd, val_infonce = model(val_x.cuda(), val_y.cuda())
+            val_dv, val_dv_loss, val_jsd, val_infonce = model(val_x.to(device),
+                                                              val_y.to(device))
 
             val_dvs.append(val_dv.item())
             val_dv_losses.append(val_dv_loss.item())
