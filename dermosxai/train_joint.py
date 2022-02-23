@@ -344,11 +344,13 @@ def train_joint_with_mi(model, train_dset, val_dset, seed=54321, batch_size=96,
     utils.tprint('Training the final MI estimator.')
     model.eval()
     with torch.no_grad():
+        train_transform = train_dset.transform
         train_dset.transform = val_dset.transform  # do not augment
         train_human_features, train_convnet_features = _get_intermediate_features(
             model, train_dset)
         val_human_features, val_convnet_features = _get_intermediate_features(
             model, val_dset)
+        train_dset.transform = train_transform
     mi_estimator = mi.train_mi(train_human_features, train_convnet_features,
                                val_human_features, val_convnet_features)[0]
     mi_estimator.eval()
