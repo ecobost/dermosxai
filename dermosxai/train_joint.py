@@ -351,6 +351,8 @@ def train_joint_with_mi(model, train_dset, val_dset, seed=54321, batch_size=96,
         val_human_features, val_convnet_features = _get_intermediate_features(
             model, val_dset)
         train_dset.transform = train_transform
+    model.train()
+    model.abl.eval()
     mi_estimator = mi.train_mi(train_human_features, train_convnet_features,
                                val_human_features, val_convnet_features)[0]
     mi_estimator.eval()
@@ -453,7 +455,7 @@ def get_HAM10000_joint_model(wandb_path):
                                root='/tmp').name  # downloads weights
     model.load_state_dict(torch.load(model_path))
 
-    # Get MI estimator too 
+    # Get MI estimator too
     mi_estimator = mi.MIEstimator(
         (sum(model.abl.out_channels), model.extractor.out_channels))
     estimator_path = wandb.restore('estimator.pt', run_path=wandb_path, replace=True,
@@ -476,7 +478,7 @@ def evaluate_HAM10000(wandb_path):
 
     # Get transforms
     _, test_transform = transforms.get_HAM10000_transforms(train_dset.img_mean,
-                                                       train_dset.img_std)
+                                                           train_dset.img_std)
     test_dset.transform = test_transform
 
     # Get dloader
@@ -504,15 +506,15 @@ def evaluate_HAM10000(wandb_path):
     human_features = torch.cat(human_features)
     convnet_features = torch.cat(convnet_features)
     labels = torch.cat(labels)
-    
+
     # Compute metrics
     probs = F.softmax(logits, dim=-1).cpu().numpy()
     print('Metrics (HAM10000)', utils.compute_metrics(probs, labels.numpy()))
-    
+
     # Compute MI
     print('MI estimates (HAM10000);', mi_estimator(human_features, convnet_features))
 
-    
+
 
 def train_DDSM():
     # Get dsets
