@@ -15,7 +15,7 @@ from dermosxai import datasets, mi, models, train_abl, transforms, utils
 
 
 @torch.no_grad()
-def _get_intermediate_features(model, dset, batch_size=128, device='cuda'):
+def get_intermediate_features(model, dset, batch_size=128, device='cuda'):
     """ Gets all human and convnet features from a joint model."""
     model.to(device)
     dloader = data.DataLoader(dset, batch_size=batch_size, num_workers=4)
@@ -346,9 +346,9 @@ def train_joint_with_mi(model, train_dset, val_dset, seed=54321, batch_size=96,
     with torch.no_grad():
         train_transform = train_dset.transform
         train_dset.transform = val_dset.transform  # do not augment
-        train_human_features, train_convnet_features = _get_intermediate_features(
+        train_human_features, train_convnet_features = get_intermediate_features(
             model, train_dset)
-        val_human_features, val_convnet_features = _get_intermediate_features(
+        val_human_features, val_convnet_features = get_intermediate_features(
             model, val_dset)
         train_dset.transform = train_transform
     model.train()
@@ -432,7 +432,7 @@ def train_HAM10000():
                     pass
 
 
-def get_HAM10000_joint_model(wandb_path):
+def get_HAM10000_joint(wandb_path):
     """ Downloads pretrained weights from wandb and loads model.
     
     Arguments:
@@ -444,7 +444,6 @@ def get_HAM10000_joint_model(wandb_path):
         mi_estimator (nn.Module): The pretrained MIEstimator for human and convnet 
             features outputted by the model.
     """
-    utils.log('Setting up model...')
     num_classes = 4  # datasets.HAM10000('train').labels.max() + 1
     abl_model = train_abl.get_HAM10000_AbL()
     extractor = models.ResNetBase(num_blocks=3)
@@ -485,7 +484,7 @@ def evaluate_HAM10000(wandb_path):
     dloader = data.DataLoader(test_dset, batch_size=128, num_workers=4)
 
     # # Get model
-    model, mi_estimator = get_HAM10000_joint_model(wandb_path)
+    model, mi_estimator = get_HAM10000_joint(wandb_path)
     model.cuda()
     model.eval()
     mi_estimator.cuda()
@@ -553,7 +552,7 @@ def train_DDSM():
                     pass
 
 
-def get_DDSM_joint_model(wandb_path='ldldld'):
+def get_DDSM_joint(wandb_path='ldldld'):
     """ Loads a joint model from wandb and returns it"""
     pass
     #return model, mi_estimator
@@ -561,46 +560,47 @@ def get_DDSM_joint_model(wandb_path='ldldld'):
 
 def evaluate_DDSM(wandb_path=''):
     """ Computes the evaluaton  metrics (and MI) in the test set."""
-    # Get data
-    train_dset = datasets.DDSM('train')
-    test_dset = datasets.DDSM('test')
+    pass
+    # # Get data
+    # train_dset = datasets.DDSM('train')
+    # test_dset = datasets.DDSM('test')
 
-    # Get transforms
-    _, test_transform = transforms.get_DDSM_transforms(train_dset.img_mean,
-                                                      train_dset.img_std, make_rgb=True)
-    test_dset.transform = test_transform
+    # # Get transforms
+    # _, test_transform = transforms.get_DDSM_transforms(train_dset.img_mean,
+    #                                                   train_dset.img_std, make_rgb=True)
+    # test_dset.transform = test_transform
 
-    # Get dloader
-    dloader = data.DataLoader(test_dset, batch_size=128, num_workers=4)
+    # # Get dloader
+    # dloader = data.DataLoader(test_dset, batch_size=128, num_workers=4)
 
-    # Get model
-    model, mi_estimator = get_DDSM_joint_model(wandb_path)
-    model.cuda()
-    model.eval()
-    mi_estimator.cuda()
-    mi_estimator.eval()
+    # # Get model
+    # model, mi_estimator = get_DDSM_joint(wandb_path)
+    # model.cuda()
+    # model.eval()
+    # mi_estimator.cuda()
+    # mi_estimator.eval()
 
-    # Pass through model
-    logits = []
-    labels = []
-    human_features = []
-    convnet_features = []
-    for images, labels_ in dloader:
-        logits.append(model(images.cuda()).detach().cpu())
-        human_features.append(model.human_features.detach())
-        convnet_features.append(model.convnet_features.detach())
-        labels.append(labels_.detach().cpu())
-    logits = torch.cat(logits)
-    human_features = torch.cat(human_features)
-    convnet_features = torch.cat(convnet_features)
-    labels = torch.cat(labels)
+    # # Pass through model
+    # logits = []
+    # labels = []
+    # human_features = []
+    # convnet_features = []
+    # for images, labels_ in dloader:
+    #     logits.append(model(images.cuda()).detach().cpu())
+    #     human_features.append(model.human_features.detach())
+    #     convnet_features.append(model.convnet_features.detach())
+    #     labels.append(labels_.detach().cpu())
+    # logits = torch.cat(logits)
+    # human_features = torch.cat(human_features)
+    # convnet_features = torch.cat(convnet_features)
+    # labels = torch.cat(labels)
 
-    # Compute MI
-    print('MI estimates (DDSM);', mi_estimator(human_features, convnet_features))
+    # # Compute MI
+    # print('MI estimates (DDSM);', mi_estimator(human_features, convnet_features))
 
-    # Compute metrics
-    probs = F.softmax(logits, dim=-1).cpu().numpy()
-    print('Metrics (DDSM)', utils.compute_metrics(probs, labels.numpy()))
+    # # Compute metrics
+    # probs = F.softmax(logits, dim=-1).cpu().numpy()
+    # print('Metrics (DDSM)', utils.compute_metrics(probs, labels.numpy()))
 
 
 
