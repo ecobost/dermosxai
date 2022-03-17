@@ -6,9 +6,6 @@ import numpy as np
 
 from dermosxai import datasets, models, train_abl, transforms, utils
 
-# Set directory to save results
-DDSM_dir = '/src/dermosxai/data/DDSM/classifiers'
-HAM10000_dir = '/src/dermosxai/data/DDSM/classifiers'
 
 def train_linear(X, y, wds=np.logspace(-4, 4, 17)):
     """ Train linear models (sklearn.linear_model).
@@ -139,7 +136,7 @@ def train_linear_on_resnet(train_dset, val_dset, save_dir):
         train_features = extract_features(resnet, train_dset)
         val_features = extract_features(resnet, val_dset)
 
-        # # Normalize features
+        # Normalize features
         train_mean, train_std = train_features.mean(0), train_features.std(0)
         train_features = (train_features - train_mean) / train_std
         val_features = (val_features - train_mean) / train_std
@@ -694,10 +691,11 @@ if __name__ == '__main__':
     train_HAM10000_linear_on_human()
     train_HAM10000_linear_on_joint()
 
-    # Test all models (this jusrt prints stuff)
+    # Test all models (this just prints stuff)
     eval_DDSM_linear_on_resnet()
     eval_DDSM_linear_on_human()
     eval_DDSM_linear_on_joint()
+    print()
     eval_HAM10000_linear_on_resnet()
     eval_HAM10000_linear_on_human()
     eval_HAM10000_linear_on_joint()
@@ -706,6 +704,7 @@ if __name__ == '__main__':
 Test metrics (resnet, DDSM): [0.72727273 0.44052187 0.44359055 0.67206478 0.78299092 0.72841511]
 Test metrics (human, DDSM): [0.74074074 0.45628967 0.45639209 0.6695279  0.80807453 0.73024843]
 Test metrics (joint, DDSM): [0.68686869 0.34539637 0.34561048 0.60425532 0.73884376 0.66322116]
+
 Test metrics (resnet, HAM10000): [0.87411598 0.67191378 0.67273709 0.7323828  0.94910305 0.77070733]
 Test metrics (human, HAM10000): [0.78925035 0.3352286  0.3610032  0.4917989  0.8627192  0.55125827]
 Test metrics (joint, HAM10000): [0.85148515 0.62600131 0.62618153 0.70036548 0.9366731  0.74395133]
@@ -848,5 +847,6 @@ def compute_HAM10000_joint_MI():
 
 """
 Test MI (DDSM):  0.31409886479377747 -1.252334713935852 -5.379660129547119
+
 Test MI (HAM10000):  3.1195478439331055 -0.5205932855606079 -3.4473540782928467
 """
