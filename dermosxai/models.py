@@ -660,8 +660,8 @@ class JointWithLinearHead(nn.Module):
     def forward(self, x):
         # Get human attributes
         logits_per_attr = self.abl(x)
-        self.human_features = torch.cat([F.softmax(lgt, -1) for lgt in logits_per_attr],
-                                        dim=-1)
+        probs_per_attr = [F.softmax(lgt, -1) for lgt in logits_per_attr]
+        self.human_features = torch.cat(probs_per_attr, dim=-1)
 
         # Get image features
         self.convnet_features = torch.mean(self.extractor(x), dim=(-1, -2))
