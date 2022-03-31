@@ -33,7 +33,7 @@ def get_intermediate_features(model, dset, batch_size=128, device='cuda'):
 
 
 def make_infinite(dloader):
-    """ Infinitely cycle through the dataloader (shuffling the inputs each time)."""
+    """ Infinitely cycle through the dataloader (shuffling the inputs each loop)."""
     while True:
         yield from dloader
 
@@ -119,7 +119,7 @@ def train_joint_with_mi(model, train_dset, val_dset, seed=54321, batch_size=96,
         'num_epochs': num_epochs, 'decay_epochs': decay_epochs, 'lr_decay': lr_decay,
         'stopping_epochs': stopping_epochs, 'base_lr_factor': base_lr_factor,
         'mi_patience': mi_patience, **wandb_extra_hyperparams}
-    wandb.init(project='dermosxai_joint', group=wandb_group, config=hyperparams,
+    wandb.init(project='dermosxai_joint2', group=wandb_group, config=hyperparams,
                dir='/src/dermosxai/data')
 
     # Set random seed
@@ -312,7 +312,7 @@ def train_joint_with_mi(model, train_dset, val_dset, seed=54321, batch_size=96,
 
         # Save best model yet (if needed)
         if val_mcc > best_mcc:
-            utils.tprint(f'Saving best model. Improvement: {val_mcc-best_mcc:.3f} ')
+            utils.tprint(f'Saving best model. Improvement: {val_mcc-best_mcc:.3f}')
             best_epoch = epoch
             best_mcc = val_mcc
             best_acc = val_accuracy
@@ -342,17 +342,18 @@ def train_joint_with_mi(model, train_dset, val_dset, seed=54321, batch_size=96,
 
     # Recompute MI estimates with a estimator trained from scratch
     utils.tprint('Training the final MI estimator.')
-    model.eval()
+    best_model.cuda()
+    best_model.eval()
     with torch.no_grad():
         train_transform = train_dset.transform
         train_dset.transform = val_dset.transform  # do not augment
         train_human_features, train_convnet_features = get_intermediate_features(
-            model, train_dset)
+            best_model, train_dset)
         val_human_features, val_convnet_features = get_intermediate_features(
-            model, val_dset)
+            best_model, val_dset)
         train_dset.transform = train_transform
-    model.train()
-    model.abl.eval()
+    best_model.train()
+    best_model.abl.eval()
     mi_estimator = mi.train_mi(train_human_features, train_convnet_features,
                                val_human_features, val_convnet_features)[0]
     mi_estimator.eval()
@@ -397,9 +398,9 @@ def train_HAM10000():
     model = models.JointWithLinearHead(abl_model, extractor, out_channels=num_classes)
 
     # Train
-    for learning_rate, base_lr_factor in [(1e-4, 1), (1e-3, 1e-1), (1e-2, 1e-2)]:
-        for weight_decay in [0, 1e-3]:
-            for mi_lambda in [0, 1e-3, 1e-2, 1e-1, 1e0, 1e-1]:
+    for learning_rate, base_lr_factor in [(1e-4, 1), (1e-3, 1e-1)]:
+        for weight_decay in [0]:
+            for mi_lambda in [0, 1e-2, 1e-1, 1e0, 1e-1]:
 
                 try:
                     train_joint_with_mi(copy.deepcopy(model), train_dset, val_dset,
@@ -439,9 +440,9 @@ def train_HAM10000():
     model = models.JointWithLinearHead(abl_model, extractor, out_channels=num_classes)
 
     # Train
-    for learning_rate in [1e-4, 1e-3, 1e-2]:
-        for weight_decay in [0, 1e-3]:
-            for mi_lambda in [0, 1e-3, 1e-2, 1e-1, 1e0, 1e1]:
+    for learning_rate in [1e-4, 1e-3]:
+        for weight_decay in [0]:
+            for mi_lambda in [0, 1e-1, 1e0, 1e1, 1e10]:
                 try:
                     train_joint_with_mi(copy.deepcopy(model), train_dset, val_dset,
                                         learning_rate=learning_rate,
