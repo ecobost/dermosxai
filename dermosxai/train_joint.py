@@ -103,7 +103,7 @@ def train_joint_with_mi(model, train_dset, val_dset, seed=54321, batch_size=96,
         'num_epochs': num_epochs, 'decay_epochs': decay_epochs, 'lr_decay': lr_decay,
         'stopping_epochs': stopping_epochs, 'base_lr_factor': base_lr_factor,
         **wandb_extra_hyperparams}
-    wandb.init(project='dermosxai_joint3', group=wandb_group, config=hyperparams,
+    wandb.init(project='dermosxai_joint', group=wandb_group, config=hyperparams,
                dir='/src/dermosxai/data')
 
     # Set random seed
@@ -375,9 +375,9 @@ def train_HAM10000():
     model = models.JointWithLinearHead(abl_model, extractor, out_channels=num_classes)
 
     # Train
-    for learning_rate, base_lr_factor in [(1e-4, 1), (1e-3, 1e-1)]:
+    for learning_rate, base_lr_factor in [(1e-4, 1), (1e-3, 1e-1), (1e-2, 1e-2)]:
         for weight_decay in [0, 1e-2]:
-            for mi_lambda in [0, 1e-2, 1e-1, 1e0, 1e-1]:
+            for mi_lambda in [0, 1e-1, 1e0, 1e1]:
                 try:
                     train_joint_with_mi(copy.deepcopy(model), train_dset, val_dset,
                                         learning_rate=learning_rate,
@@ -396,9 +396,9 @@ def train_HAM10000():
     model = models.JointWithLinearHead(abl_model, extractor, out_channels=num_classes)
 
     # Train
-    for learning_rate in [1e-4, 1e-3]:
+    for learning_rate in [1e-4, 1e-3, 1e-2]:
         for weight_decay in [0, 1e-2]:
-            for mi_lambda in [0, 1e-1, 1e0, 1e1, 1e10]:
+            for mi_lambda in [0, 1e-1, 1e0, 1e1]:
                 try:
                     train_joint_with_mi(copy.deepcopy(model), train_dset, val_dset,
                                         learning_rate=learning_rate,
@@ -517,35 +517,14 @@ def train_DDSM():
 
     # Train
     for learning_rate, base_lr_factor in [(1e-4, 1), (1e-3, 1e-1), (1e-2, 1e-2)]:
-        for weight_decay in [0, 1e-3]:
-            for mi_lambda in [0, 1e-2, 1e-1, 1e0, 1e1]:
-
+        for weight_decay in [0, 1e-2]:
+            for mi_lambda in [0, 1e-1, 1e0, 1e1]:
                 try:
                     train_joint_with_mi(copy.deepcopy(model), train_dset, val_dset,
                                         learning_rate=learning_rate,
                                         weight_decay=weight_decay, mi_lambda=mi_lambda,
                                         base_lr_factor=base_lr_factor,
                                         wandb_group='ddsm',
-                                        wandb_extra_hyperparams={'base': 'resnet'})
-                except ValueError:  # ignore convergence error
-                    pass
-
-                try:
-                    train_joint_with_mi(copy.deepcopy(model), train_dset, val_dset,
-                                        learning_rate=learning_rate,
-                                        weight_decay=weight_decay, mi_lambda=mi_lambda,
-                                        base_lr_factor=base_lr_factor,
-                                        wandb_group='ddsm', human_only_epochs=5,
-                                        wandb_extra_hyperparams={'base': 'resnet'})
-                except ValueError:  # ignore convergence error
-                    pass
-
-                try:
-                    train_joint_with_mi(copy.deepcopy(model), train_dset, val_dset,
-                                        learning_rate=learning_rate,
-                                        weight_decay=weight_decay, mi_lambda=mi_lambda,
-                                        base_lr_factor=base_lr_factor,
-                                        wandb_group='ddsm', mi_patience=5,
                                         wandb_extra_hyperparams={'base': 'resnet'})
                 except ValueError:  # ignore convergence error
                     pass
@@ -559,31 +538,13 @@ def train_DDSM():
 
     # Train
     for learning_rate in [1e-4, 1e-3, 1e-2]:
-        for weight_decay in [0, 1e-3]:
-            for mi_lambda in [0, 1e-2, 1e-1, 1e0, 1e1]:
+        for weight_decay in [0, 1e-2]:
+            for mi_lambda in [0, 1e-1, 1e0, 1e1]:
                 try:
                     train_joint_with_mi(copy.deepcopy(model), train_dset, val_dset,
                                         learning_rate=learning_rate,
                                         weight_decay=weight_decay, mi_lambda=mi_lambda,
                                         wandb_group='ddsm',
-                                        wandb_extra_hyperparams={'base': 'convnet'})
-                except ValueError:  # ignore convergence error
-                    pass
-
-                try:
-                    train_joint_with_mi(copy.deepcopy(model), train_dset, val_dset,
-                                        learning_rate=learning_rate,
-                                        weight_decay=weight_decay, mi_lambda=mi_lambda,
-                                        wandb_group='ddsm', human_only_epochs=5,
-                                        wandb_extra_hyperparams={'base': 'convnet'})
-                except ValueError:  # ignore convergence error
-                    pass
-
-                try:
-                    train_joint_with_mi(copy.deepcopy(model), train_dset, val_dset,
-                                        learning_rate=learning_rate,
-                                        weight_decay=weight_decay, mi_lambda=mi_lambda,
-                                        wandb_group='ddsm', mi_patience=5,
                                         wandb_extra_hyperparams={'base': 'convnet'})
                 except ValueError:  # ignore convergence error
                     pass
