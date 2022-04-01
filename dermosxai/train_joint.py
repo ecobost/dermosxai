@@ -40,30 +40,21 @@ def make_infinite(dloader):
 
 def train_joint_with_mi(model, train_dset, val_dset, seed=54321, batch_size=96,
                         learning_rate=0.01, weight_decay=1e-5, mi_learning_rate=1e-3,
-                        mi_weight_decay=0, mi_num_epochs_factor=10,
-                        human_only_learning_rate=1e-2, human_only_weight_decay=1e-4,
-                        human_only_epochs=0, mi_lambda=0.1, num_epochs=200,
-                        decay_epochs=4, lr_decay=0.1, stopping_epochs=25,
-                        base_lr_factor=1, wandb_group=None, mi_patience=0,
-                        wandb_extra_hyperparams={}):
+                        mi_weight_decay=0, mi_num_epochs_factor=5, mi_lambda=0.1,
+                        mi_scaling_epochs=10, num_epochs=200, decay_epochs=4,
+                        lr_decay=0.1, stopping_epochs=25, base_lr_factor=1,
+                        wandb_group=None, wandb_extra_hyperparams={}):
     """  Train a composite model (concat(human_features, image_features) + linear) for 
     diagnosis with MI penalty.
     
-    Uses ADAM optimizer and the validation set for early stopping. MI estimator is trained
-    in parallel, although it could see more data than the rest of the model, i.e., for 
-    each batch (forward plus backward of the model) the MI estimator is trained for 
-    mi_num_epochs_factor as many batches.
+    Uses ADAM optimizer and the validation set for early stopping.
     
-    I test three different ways to add the MI penalty here:
-        1) Normal: the MI penalty is added to the optimization loss from the start
-        2) Patience: MI penalty is added to the optimization loss after mi_patience 
-            (default=0) epochs have passed. This allows for the mi estimator to converge 
-            for those initial epochs.
-        3) Initially train only the linear layer on top of the human attributes (wo MI 
-            penalty) for pretrain_epochs (default=0) and train the full model (inc. MI) 
-            afterwards. This makes the model learn to predict seeing only the human 
-            attributes and later use the image features as extra information.
-    
+    MI estimator is trained in parallel, although it could see more data than the rest of 
+    the model, i.e., for each batch (forward plus backward of the model) the MI estimator 
+    is trained for mi_num_epochs_factor as many batches. To avoid noisy MI estimates 
+    hinder learning at early stages, we also linearly increase the mi penalty from 0 to 
+    mi_lambda over mi_scaling_epochs epochs.
+        
     Arguments (input):
         model (nn.Module): Pytorch module. Receives an image input, outputs a list of 
             logit vectors to obtain the probabilities for each attribute.
@@ -77,13 +68,6 @@ def train_joint_with_mi(model, train_dset, val_dset, seed=54321, batch_size=96,
             estimator.
         mi_num_epochs_factor (int): Factor of epochs to train the MI estimator in 
             comparison to the classification model (see docstring above).
-            
-    Arguments (human only pretraining):
-        human_only_learning_rate (float): Learning rate to use for the linear layer on 
-            human attributes.
-        human_only_weight_decay (float): Regularization strength during pretraining.
-        human_only_epochs (int): Number of epochs to pretrain the human linear layer. Set to
-            0 for no pretraining.
     
     Arguments (training):
         seed (int): Random seed for weight initialization and dataloaders.
@@ -91,6 +75,8 @@ def train_joint_with_mi(model, train_dset, val_dset, seed=54321, batch_size=96,
         learning_rate (float): Learning rate for ADAM.
         weight_decay (float): Regularization strength.
         mi_lambda (float): Strength for the MI penalty in the loss.
+        mi_scaling_epochs (int): MI penalty is linearly scaled from 0 to mi_lambda over 
+            this number of epochs.
         num_epochs (int): Number of maximum epochs to train to.
         decay_epochs (int): Number of epochs to wait before decreasing learning rate if 
             validation mcc has not improved.
@@ -113,13 +99,11 @@ def train_joint_with_mi(model, train_dset, val_dset, seed=54321, batch_size=96,
         'seed': seed, 'batch_size': batch_size, 'learning_rate': learning_rate,
         'weight_decay': weight_decay, 'mi_learning_rate': mi_learning_rate,
         'mi_weight_decay': mi_weight_decay, 'mi_num_epochs_factor': mi_num_epochs_factor,
-        'human_only_learning_rate': human_only_learning_rate,
-        'human_only_weight_decay': human_only_weight_decay,
-        'human_only_epochs': human_only_epochs, 'mi_lambda': mi_lambda,
+        'mi_lambda': mi_lambda, 'mi_scaling_epochs': mi_scaling_epochs,
         'num_epochs': num_epochs, 'decay_epochs': decay_epochs, 'lr_decay': lr_decay,
         'stopping_epochs': stopping_epochs, 'base_lr_factor': base_lr_factor,
-        'mi_patience': mi_patience, **wandb_extra_hyperparams}
-    wandb.init(project='dermosxai_joint2', group=wandb_group, config=hyperparams,
+        **wandb_extra_hyperparams}
+    wandb.init(project='dermosxai_joint3', group=wandb_group, config=hyperparams,
                dir='/src/dermosxai/data')
 
     # Set random seed
@@ -151,19 +135,17 @@ def train_joint_with_mi(model, train_dset, val_dset, seed=54321, batch_size=96,
     mi_estimator.train()
     mi_estimator.cuda()
 
-    # Declare optimizers
+    # Declare optimizer
     utils.tprint('Declaring optimizer')
-    pretrain_optimizer = optim.Adam(model.linear_human.parameters(),
-                                    lr=human_only_learning_rate,
-                                    weight_decay=human_only_weight_decay)
-    base_lr = learning_rate * base_lr_factor
-    optimizer = optim.Adam([{'params': model.extractor.parameters(), 'lr': base_lr}, {
-        'params': [*model.linear_human.parameters(), *model.linear_convnet.parameters()]}
-                            ], lr=learning_rate, weight_decay=weight_decay)
+    base_params = model.extractor.parameters()
+    head_params = [*model.linear_human.parameters(), *model.linear_convnet.parameters()]
+    optimizer = optim.Adam([{'params': base_params, 'lr': learning_rate * base_lr_factor},
+                            {'params': head_params}], lr=learning_rate,
+                           weight_decay=weight_decay)
     scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, factor=lr_decay, mode='max',
                                                patience=decay_epochs, verbose=True)
 
-    # Declare MI optimizer
+    # Declare MI optmiizer
     mi_optimizer = optim.Adam(mi_estimator.parameters(), lr=mi_learning_rate,
                               weight_decay=mi_weight_decay)
 
@@ -179,8 +161,14 @@ def train_joint_with_mi(model, train_dset, val_dset, seed=54321, batch_size=96,
     for epoch in range(1, num_epochs + 1):
         utils.tprint(f'Epoch {epoch}:')
 
+        # Compute MI for this epoch
+        mi_lambda_prop = min((epoch - 1) / mi_scaling_epochs, 1)
+        current_mi_lambda = mi_lambda * mi_lambda_prop
+
         # Record learning rate
-        wandb.log({'epoch': epoch, 'lr': optimizer.param_groups[1]['lr']})
+        wandb.log({
+            'epoch': epoch, 'lr': optimizer.param_groups[1]['lr'],
+            'current_mi_lambda': current_mi_lambda})
 
         # Loop over training set
         for batch_i, (images, labels) in enumerate(train_dloader):
@@ -193,11 +181,7 @@ def train_joint_with_mi(model, train_dset, val_dset, seed=54321, batch_size=96,
             dv_mi, dv_loss, jsd_mi, infonce_mi = mi_estimator(model.human_features,
                                                               model.convnet_features)
             mi_estimator.train()
-
-            if epoch <= mi_patience:
-                loss = nll
-            else:
-                loss = nll + mi_lambda * dv_loss  # dv_loss gives unbiased gradients for MINE
+            loss = nll + current_mi_lambda * dv_loss  # dv_loss gives unbiased gradients
 
             # Compute other metrics
             with torch.no_grad():
@@ -228,12 +212,8 @@ def train_joint_with_mi(model, train_dset, val_dset, seed=54321, batch_size=96,
 
             # Backprop
             model.zero_grad()
-            if epoch <= human_only_epochs:
-                nll.backward()
-                pretrain_optimizer.step()
-            else:
-                loss.backward()
-                optimizer.step()
+            loss.backward()
+            optimizer.step()
 
             # Backprop for the MI estimator (mi_num_epochs_factor times)
             model.eval()
@@ -274,10 +254,7 @@ def train_joint_with_mi(model, train_dset, val_dset, seed=54321, batch_size=96,
             val_dv_mi, val_dv_loss, val_jsd_mi, val_infonce_mi = mi_estimator(
                 val_human_features, val_convnet_features)
             mi_estimator.cuda()
-            if epoch <= mi_patience:
-                val_loss = val_nll
-            else:
-                val_loss = val_nll + mi_lambda * val_dv_loss
+            val_loss = val_nll + current_mi_lambda * val_dv_loss
 
             # Compute metrics
             val_probs = F.softmax(val_logits, dim=-1)
@@ -307,11 +284,11 @@ def train_joint_with_mi(model, train_dset, val_dset, seed=54321, batch_size=96,
             wandb.run.summary['best_val_mi'] = best_mi
             wandb.run.finish()
             raise ValueError('Validation loss diverged')
-        if epoch > human_only_epochs and epoch > mi_patience:
+        if epoch > mi_scaling_epochs:
             scheduler.step(val_mcc)
 
         # Save best model yet (if needed)
-        if val_mcc > best_mcc:
+        if val_mcc > best_mcc and epoch > mi_scaling_epochs:
             utils.tprint(f'Saving best model. Improvement: {val_mcc-best_mcc:.3f}')
             best_epoch = epoch
             best_mcc = val_mcc
@@ -381,8 +358,8 @@ def train_HAM10000():
     val_dset = datasets.HAM10000('val')
 
     # Add transforms
-    train_transform, val_transform = transforms.get_HAM10000_transforms(train_dset.img_mean,
-                                                      train_dset.img_std)
+    train_transform, val_transform = transforms.get_HAM10000_transforms(
+        train_dset.img_mean, train_dset.img_std)
     train_dset.transform = train_transform
     val_dset.transform = val_transform
 
@@ -399,35 +376,14 @@ def train_HAM10000():
 
     # Train
     for learning_rate, base_lr_factor in [(1e-4, 1), (1e-3, 1e-1)]:
-        for weight_decay in [0]:
+        for weight_decay in [0, 1e-2]:
             for mi_lambda in [0, 1e-2, 1e-1, 1e0, 1e-1]:
-
                 try:
                     train_joint_with_mi(copy.deepcopy(model), train_dset, val_dset,
                                         learning_rate=learning_rate,
                                         weight_decay=weight_decay, mi_lambda=mi_lambda,
                                         base_lr_factor=base_lr_factor,
                                         wandb_group='ham10000',
-                                        wandb_extra_hyperparams={'base': 'resnet'})
-                except ValueError:  # ignore convergence error
-                    pass
-
-                try:
-                    train_joint_with_mi(copy.deepcopy(model), train_dset, val_dset,
-                                        learning_rate=learning_rate,
-                                        weight_decay=weight_decay, mi_lambda=mi_lambda,
-                                        base_lr_factor=base_lr_factor,
-                                        wandb_group='ham10000', human_only_epochs=5,
-                                        wandb_extra_hyperparams={'base': 'resnet'})
-                except ValueError:  # ignore convergence error
-                    pass
-
-                try:
-                    train_joint_with_mi(copy.deepcopy(model), train_dset, val_dset,
-                                        learning_rate=learning_rate,
-                                        weight_decay=weight_decay, mi_lambda=mi_lambda,
-                                        base_lr_factor=base_lr_factor,
-                                        wandb_group='ham10000', mi_patience=5,
                                         wandb_extra_hyperparams={'base': 'resnet'})
                 except ValueError:  # ignore convergence error
                     pass
@@ -441,31 +397,13 @@ def train_HAM10000():
 
     # Train
     for learning_rate in [1e-4, 1e-3]:
-        for weight_decay in [0]:
+        for weight_decay in [0, 1e-2]:
             for mi_lambda in [0, 1e-1, 1e0, 1e1, 1e10]:
                 try:
                     train_joint_with_mi(copy.deepcopy(model), train_dset, val_dset,
                                         learning_rate=learning_rate,
                                         weight_decay=weight_decay, mi_lambda=mi_lambda,
                                         wandb_group='ham10000',
-                                        wandb_extra_hyperparams={'base': 'convnet'})
-                except ValueError:  # ignore convergence error
-                    pass
-
-                try:
-                    train_joint_with_mi(copy.deepcopy(model), train_dset, val_dset,
-                                        learning_rate=learning_rate,
-                                        weight_decay=weight_decay, mi_lambda=mi_lambda,
-                                        wandb_group='ham10000', human_only_epochs=5,
-                                        wandb_extra_hyperparams={'base': 'convnet'})
-                except ValueError:  # ignore convergence error
-                    pass
-
-                try:
-                    train_joint_with_mi(copy.deepcopy(model), train_dset, val_dset,
-                                        learning_rate=learning_rate,
-                                        weight_decay=weight_decay, mi_lambda=mi_lambda,
-                                        wandb_group='ham10000', mi_patience=5,
                                         wandb_extra_hyperparams={'base': 'convnet'})
                 except ValueError:  # ignore convergence error
                     pass
@@ -649,7 +587,7 @@ def train_DDSM():
                                         wandb_extra_hyperparams={'base': 'convnet'})
                 except ValueError:  # ignore convergence error
                     pass
-                
+
 
 def get_DDSM_joint(wandb_path='ldldld'):
     """ Loads a joint model from wandb and returns it"""
