@@ -104,7 +104,7 @@ def train_joint_with_mi(model, train_dset, val_dset, seed=54321, batch_size=96,
         'stopping_epochs': stopping_epochs, 'base_lr_factor': base_lr_factor,
         **wandb_extra_hyperparams}
     wandb.init(project='dermosxai_joint', group=wandb_group, config=hyperparams,
-               dir='/src/dermosxai/data')
+               dir='/src/dermosxai/data', tags=['use_dvmi', 'retraineachepoch'])
 
     # Set random seed
     torch.manual_seed(seed)
@@ -165,6 +165,13 @@ def train_joint_with_mi(model, train_dset, val_dset, seed=54321, batch_size=96,
         mi_lambda_prop = min((epoch - 1) / mi_scaling_epochs, 1)
         current_mi_lambda = mi_lambda * mi_lambda_prop
 
+        # ###################3 DELETE
+        # mi_exp_factor = min(epoch - mi_scaling_epochs, 0)
+        # current_mi_lambda = mi_lambda * (10 ** mi_exp_factor)
+        # ##################
+
+
+
         # Record learning rate
         wandb.log({
             'epoch': epoch, 'lr': optimizer.param_groups[1]['lr'],
@@ -181,7 +188,8 @@ def train_joint_with_mi(model, train_dset, val_dset, seed=54321, batch_size=96,
             dv_mi, dv_loss, jsd_mi, infonce_mi = mi_estimator(model.human_features,
                                                               model.convnet_features)
             mi_estimator.train()
-            loss = nll + current_mi_lambda * dv_loss  # dv_loss gives unbiased gradients
+            #loss = nll + current_mi_lambda * dv_loss  # dv_loss gives unbiased gradients
+            loss = nll + current_mi_lambda * dv_mi
 
             # Compute other metrics
             with torch.no_grad():
@@ -223,12 +231,43 @@ def train_joint_with_mi(model, train_dset, val_dset, seed=54321, batch_size=96,
 
                 # Backprop for the MI estimator
                 mi_estimator.zero_grad()
+                # dv_loss = mi_estimator(model.human_features.detach(),
+                #                        model.convnet_features.detach())[1]
                 dv_loss = mi_estimator(model.human_features.detach(),
-                                       model.convnet_features.detach())[1]
+                                       model.convnet_features.detach())[0]
                 (-dv_loss).backward()
                 mi_optimizer.step()
             model.train()
             model.abl.eval()
+
+
+
+
+        #################################################3
+        # Fully retrain MI estimator
+        utils.tprint('Retraining MI estimator.')
+        model.eval()
+        with torch.no_grad():
+            train_transform = train_dset.transform
+            train_dset.transform = val_dset.transform  # do not augment
+            train_human_features, train_convnet_features = get_intermediate_features(
+                model, train_dset)
+            val_human_features, val_convnet_features = get_intermediate_features(
+                model, val_dset)
+            train_dset.transform = train_transform
+        model.train()
+        model.abl.eval()
+        mi_estimator = mi.train_mi(train_human_features, train_convnet_features,
+                                val_human_features, val_convnet_features)[0]  # TODO: should this use the dv_mi rather than dv_mi_loss
+        mi_estimator.train()
+        mi_optimizer = optim.Adam(mi_estimator.parameters(), lr=mi_learning_rate,
+                              weight_decay=mi_weight_decay)
+        #####################################################
+
+
+
+
+
 
         # Compute loss on validation set
         model.eval()
@@ -254,7 +293,8 @@ def train_joint_with_mi(model, train_dset, val_dset, seed=54321, batch_size=96,
             val_dv_mi, val_dv_loss, val_jsd_mi, val_infonce_mi = mi_estimator(
                 val_human_features, val_convnet_features)
             mi_estimator.cuda()
-            val_loss = val_nll + current_mi_lambda * val_dv_loss
+            # val_loss = val_nll + current_mi_lambda * val_dv_loss
+            val_loss = val_nll + current_mi_lambda * val_dv_mi
 
             # Compute metrics
             val_probs = F.softmax(val_logits, dim=-1)
@@ -332,7 +372,7 @@ def train_joint_with_mi(model, train_dset, val_dset, seed=54321, batch_size=96,
     best_model.train()
     best_model.abl.eval()
     mi_estimator = mi.train_mi(train_human_features, train_convnet_features,
-                               val_human_features, val_convnet_features)[0]
+                               val_human_features, val_convnet_features)[0]  # TODO: should this use the dv_mi rather than dv_mi_loss
     mi_estimator.eval()
     with torch.no_grad():
         val_dv_mi, _, val_jsd_mi, val_infonce_mi = mi_estimator(
@@ -367,6 +407,47 @@ def train_HAM10000():
     utils.tprint('Setting up model...')
     abl_model = train_abl.get_HAM10000_AbL()
 
+    # # Get feature extractor
+    # extractor = models.ResNetBase(num_blocks=3)
+
+    # # Create joint model
+    # num_classes = train_dset.labels.max() + 1
+    # model = models.JointWithLinearHead(abl_model, extractor, out_channels=num_classes)
+
+    # # Train
+    # for learning_rate, base_lr_factor in [(1e-4, 1), (1e-3, 1e-1), (1e-2, 1e-2)]:
+    #     for weight_decay in [0, 1e-2]:
+    #         for mi_lambda in [0, 1e-1, 1e0, 1e1]:
+    #             try:
+    #                 train_joint_with_mi(copy.deepcopy(model), train_dset, val_dset,
+    #                                     learning_rate=learning_rate,
+    #                                     weight_decay=weight_decay, mi_lambda=mi_lambda,
+    #                                     base_lr_factor=base_lr_factor,
+    #                                     wandb_group='ham10000',
+    #                                     wandb_extra_hyperparams={'base': 'resnet'})
+    #             except ValueError:  # ignore convergence error
+    #                 pass
+
+    # # Get feature extractor
+    # extractor = models.ConvNetBase()
+
+    # # Create joint model
+    # num_classes = train_dset.labels.max() + 1
+    # model = models.JointWithLinearHead(abl_model, extractor, out_channels=num_classes)
+
+    # # Train
+    # for learning_rate in [1e-4, 1e-3, 1e-2]:
+    #     for weight_decay in [0, 1e-2]:
+    #         for mi_lambda in [0, 1e-1, 1e0, 1e1]:
+    #             try:
+    #                 train_joint_with_mi(copy.deepcopy(model), train_dset, val_dset,
+    #                                     learning_rate=learning_rate,
+    #                                     weight_decay=weight_decay, mi_lambda=mi_lambda,
+    #                                     wandb_group='ham10000',
+    #                                     wandb_extra_hyperparams={'base': 'convnet'})
+    #             except ValueError:  # ignore convergence error
+    #                 pass
+
     # Get feature extractor
     extractor = models.ResNetBase(num_blocks=3)
 
@@ -374,9 +455,57 @@ def train_HAM10000():
     num_classes = train_dset.labels.max() + 1
     model = models.JointWithLinearHead(abl_model, extractor, out_channels=num_classes)
 
-    # Train
-    for learning_rate, base_lr_factor in [(1e-4, 1), (1e-3, 1e-1), (1e-2, 1e-2)]:
-        for weight_decay in [0, 1e-2]:
+    # # Train
+    # for learning_rate, base_lr_factor in [(1e-4, 1)]:
+    #     for weight_decay in [0]:#, 1e-2]:
+    #         for mi_lambda in [0, 1e-1, 1e0, 1e1]:
+    #             try:
+    #                 train_joint_with_mi(copy.deepcopy(model), train_dset, val_dset,
+    #                                     learning_rate=learning_rate,
+    #                                     weight_decay=weight_decay, mi_lambda=mi_lambda,
+    #                                     base_lr_factor=base_lr_factor, mi_num_epochs_factor=1, mi_learning_rate=0.01,
+    #                                     wandb_group='ham10000',
+    #                                     wandb_extra_hyperparams={'base': 'resnet'})
+    #             except ValueError:  # ignore convergence error
+    #                 pass
+
+
+
+    # Train (normal)
+    for learning_rate, base_lr_factor in [(1e-4, 1), (1e-2, 1e-2)]:
+        for weight_decay in [0]:  #, 1e-2]:
+            for mi_lambda in [0, 1e-1, 1e0, 1e1]:
+                try:
+                    train_joint_with_mi(copy.deepcopy(model), train_dset, val_dset,
+                                        learning_rate=learning_rate,
+                                        weight_decay=weight_decay, mi_lambda=mi_lambda,
+                                        base_lr_factor=base_lr_factor,
+                                        mi_num_epochs_factor=1,
+                                        wandb_group='ham10000',
+                                        seed = 235,
+                                        wandb_extra_hyperparams={'base': 'resnet'})
+                except ValueError:  # ignore convergence error
+                    pass
+                
+    # Train (fastermi)
+    for learning_rate, base_lr_factor in [(1e-4, 1), (1e-2, 1e-2)]:
+        for weight_decay in [0]:  #, 1e-2]:
+            for mi_lambda in [0, 1e-1, 1e0, 1e1]:
+                try:
+                    train_joint_with_mi(copy.deepcopy(model), train_dset, val_dset,
+                                        learning_rate=learning_rate,
+                                        weight_decay=weight_decay, mi_lambda=mi_lambda,
+                                        base_lr_factor=base_lr_factor,
+                                        mi_num_epochs_factor=1, mi_learning_rate=0.01,
+                                        wandb_group='ham10000',
+                                        seed = 235,
+                                        wandb_extra_hyperparams={'base': 'resnet'})
+                except ValueError:  # ignore convergence error
+                    pass
+                
+    # Train (5epochs factor)
+    for learning_rate, base_lr_factor in [(1e-4, 1), (1e-2, 1e-2)]:
+        for weight_decay in [0]:  #, 1e-2]:
             for mi_lambda in [0, 1e-1, 1e0, 1e1]:
                 try:
                     train_joint_with_mi(copy.deepcopy(model), train_dset, val_dset,
@@ -384,27 +513,8 @@ def train_HAM10000():
                                         weight_decay=weight_decay, mi_lambda=mi_lambda,
                                         base_lr_factor=base_lr_factor,
                                         wandb_group='ham10000',
+                                        seed = 235,
                                         wandb_extra_hyperparams={'base': 'resnet'})
-                except ValueError:  # ignore convergence error
-                    pass
-
-    # Get feature extractor
-    extractor = models.ConvNetBase()
-
-    # Create joint model
-    num_classes = train_dset.labels.max() + 1
-    model = models.JointWithLinearHead(abl_model, extractor, out_channels=num_classes)
-
-    # Train
-    for learning_rate in [1e-4, 1e-3, 1e-2]:
-        for weight_decay in [0, 1e-2]:
-            for mi_lambda in [0, 1e-1, 1e0, 1e1]:
-                try:
-                    train_joint_with_mi(copy.deepcopy(model), train_dset, val_dset,
-                                        learning_rate=learning_rate,
-                                        weight_decay=weight_decay, mi_lambda=mi_lambda,
-                                        wandb_group='ham10000',
-                                        wandb_extra_hyperparams={'base': 'convnet'})
                 except ValueError:  # ignore convergence error
                     pass
 
