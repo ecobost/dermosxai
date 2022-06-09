@@ -375,11 +375,12 @@ def train_HAM10000():
     model = models.JointWithLinearHead(abl_model, extractor, out_channels=num_classes)
 
     # Train
-    for learning_rate, base_lr_factor in [(1e-4, 1), (1e-3, 1e-1), (1e-2, 1e-2)]:
+    for seed in [9845, 988, 1701, 5318]:#, 54321]:
+        for learning_rate, base_lr_factor in [(1e-4, 1), (1e-3, 1e-1), (1e-2, 1e-2)]:
             for mi_lambda in [0, 0.1, 0.33, 0.66, 1, 3.33, 6.66, 10]:
                 try:
                     train_joint_with_mi(copy.deepcopy(model), train_dset, val_dset,
-                                        learning_rate=learning_rate, 
+                                        learning_rate=learning_rate,
                                         base_lr_factor=base_lr_factor,
                                         mi_lambda=mi_lambda,
                                         wandb_group='ham10000',
@@ -406,7 +407,7 @@ def train_HAM10000():
     #             except ValueError:  # ignore convergence error
     #                 pass
 
-  
+
 
 def get_HAM10000_joint(wandb_path):
     """ Downloads pretrained weights from wandb and loads model.
@@ -515,93 +516,117 @@ def train_DDSM():
     model = models.JointWithLinearHead(abl_model, extractor, out_channels=num_classes)
 
     # Train
-    for learning_rate, base_lr_factor in [(1e-4, 1), (1e-3, 1e-1), (1e-2, 1e-2)]:
-        for weight_decay in [0, 1e-2]:
-            for mi_lambda in [0, 1e-1, 1e0, 1e1]:
+    for seed in [9845, 988, 1701, 5318]:#, 54321]:
+        for learning_rate, base_lr_factor in [(1e-4, 1), (1e-3, 1e-1), (1e-2, 1e-2)]:
+
+            for mi_lambda in [0, 0.1, 0.33, 0.66, 1, 3.33, 6.66, 10]:
                 try:
                     train_joint_with_mi(copy.deepcopy(model), train_dset, val_dset,
                                         learning_rate=learning_rate,
-                                        weight_decay=weight_decay, mi_lambda=mi_lambda,
-                                        base_lr_factor=base_lr_factor,
+                                        base_lr_factor=base_lr_factor, mi_lambda=mi_lambda,
                                         wandb_group='ddsm',
                                         wandb_extra_hyperparams={'base': 'resnet'})
                 except ValueError:  # ignore convergence error
                     pass
 
-    # Get feature extractor
-    extractor = models.ConvNetBase()
+    # # Get feature extractor
+    # extractor = models.ConvNetBase()
 
-    # Create joint model
-    num_classes = train_dset.labels.max() + 1
+    # # Create joint model
+    # num_classes = train_dset.labels.max() + 1
+    # model = models.JointWithLinearHead(abl_model, extractor, out_channels=num_classes)
+
+    # # Train
+    # for learning_rate in [1e-4, 1e-3, 1e-2]:
+    #     for weight_decay in [0, 1e-2]:
+    #         for mi_lambda in [0, 1e-1, 1e0, 1e1]:
+    #             try:
+    #                 train_joint_with_mi(copy.deepcopy(model), train_dset, val_dset,
+    #                                     learning_rate=learning_rate,
+    #                                     weight_decay=weight_decay, mi_lambda=mi_lambda,
+    #                                     wandb_group='ddsm',
+    #                                     wandb_extra_hyperparams={'base': 'convnet'})
+    #             except ValueError:  # ignore convergence error
+    #                 pass
+
+
+def get_DDSM_joint(wandb_path):
+    """ Downloads pretrained weights from wandb and loads model.
+    
+    Arguments:
+        wandb_path (str): Name of the run as recorded by wandb usually something like 
+            "username/project_name/run_id".
+                   
+    Returns:
+        model (nn.Module): A JointWithLinearHead model with the pretrained weights.
+        mi_estimator (nn.Module): The pretrained MIEstimator for human and convnet 
+            features outputted by the model.
+    """
+    num_classes = 2  # datasets.DDSM('train').labels.max() + 1
+    abl_model = train_abl.get_DDSM_AbL()
+    extractor = models.ResNetBase(num_blocks=3)
     model = models.JointWithLinearHead(abl_model, extractor, out_channels=num_classes)
 
-    # Train
-    for learning_rate in [1e-4, 1e-3, 1e-2]:
-        for weight_decay in [0, 1e-2]:
-            for mi_lambda in [0, 1e-1, 1e0, 1e1]:
-                try:
-                    train_joint_with_mi(copy.deepcopy(model), train_dset, val_dset,
-                                        learning_rate=learning_rate,
-                                        weight_decay=weight_decay, mi_lambda=mi_lambda,
-                                        wandb_group='ddsm',
-                                        wandb_extra_hyperparams={'base': 'convnet'})
-                except ValueError:  # ignore convergence error
-                    pass
+    # Get model from wandb
+    model_path = wandb.restore('model.pt', run_path=wandb_path, replace=True,
+                               root='/tmp').name  # downloads weights
+    model.load_state_dict(torch.load(model_path))
+
+    # Get MI estimator too
+    mi_estimator = mi.MIEstimator(
+        (sum(model.abl.out_channels), model.extractor.out_channels))
+    estimator_path = wandb.restore('estimator.pt', run_path=wandb_path, replace=True,
+                                   root='/tmp').name
+    mi_estimator.load_state_dict(torch.load(estimator_path))
+
+    return model, mi_estimator
 
 
-def get_DDSM_joint(wandb_path='ldldld'):
-    """ Loads a joint model from wandb and returns it"""
-    pass
-    #return model, mi_estimator
+def evaluate_DDSM(wandb_path):
+    """ Computes the evaluaton metrics (and MI) in the test set.
+    
+    Arguments:
+        wandb_path (str): Name of the run as recorded by wandb usually something like 
+            "username/project_name/run_id".
+    """
+    # Get data
+    train_dset = datasets.DDSM('train')
+    test_dset = datasets.DDSM('test')
 
+    # Get transforms
+    _, test_transform = transforms.get_DDSM_transforms(train_dset.img_mean,
+                                                           train_dset.img_std, make_rgb=True)
+    test_dset.transform = test_transform
 
-def evaluate_DDSM(wandb_path=''):
-    """ Computes the evaluaton  metrics (and MI) in the test set."""
-    pass
-    # # Get data
-    # train_dset = datasets.DDSM('train')
-    # test_dset = datasets.DDSM('test')
-
-    # # Get transforms
-    # _, test_transform = transforms.get_DDSM_transforms(train_dset.img_mean,
-    #                                                   train_dset.img_std, make_rgb=True)
-    # test_dset.transform = test_transform
-
-    # # Get dloader
-    # dloader = data.DataLoader(test_dset, batch_size=128, num_workers=4)
+    # Get dloader
+    dloader = data.DataLoader(test_dset, batch_size=128, num_workers=4)
 
     # # Get model
-    # model, mi_estimator = get_DDSM_joint(wandb_path)
-    # model.cuda()
-    # model.eval()
-    # mi_estimator.cuda()
-    # mi_estimator.eval()
+    model, mi_estimator = get_DDSM_joint(wandb_path)
+    model.cuda()
+    model.eval()
+    mi_estimator.cuda()
+    mi_estimator.eval()
 
-    # # Pass through model
-    # logits = []
-    # labels = []
-    # human_features = []
-    # convnet_features = []
-    # for images, labels_ in dloader:
-    #     logits.append(model(images.cuda()).detach().cpu())
-    #     human_features.append(model.human_features.detach())
-    #     convnet_features.append(model.convnet_features.detach())
-    #     labels.append(labels_.detach().cpu())
-    # logits = torch.cat(logits)
-    # human_features = torch.cat(human_features)
-    # convnet_features = torch.cat(convnet_features)
-    # labels = torch.cat(labels)
+    # Pass through model
+    logits = []
+    labels = []
+    human_features = []
+    convnet_features = []
+    with torch.no_grad():
+        for images, labels_ in dloader:
+            logits.append(model(images.cuda()).cpu())
+            human_features.append(model.human_features.cpu())
+            convnet_features.append(model.convnet_features.cpu())
+            labels.append(labels_.cpu())
+    logits = torch.cat(logits)
+    human_features = torch.cat(human_features)
+    convnet_features = torch.cat(convnet_features)
+    labels = torch.cat(labels)
 
-    # # Compute MI
-    # print('MI estimates (DDSM);', mi_estimator(human_features, convnet_features))
+    # Compute MI
+    print('MI estimates (DDSM);', mi_estimator(human_features, convnet_features))
 
-    # # Compute metrics
-    # probs = F.softmax(logits, dim=-1).cpu().numpy()
-    # print('Metrics (DDSM)', utils.compute_metrics(probs, labels.numpy()))
-
-
-
-
-#remember to do the MI in train_classifier.py (should be similar to the end part of train_joint() here)
-
-#SHAP value stuff is in a notebook
+    # Compute metrics
+    probs = F.softmax(logits, dim=-1).cpu().numpy()
+    print('Metrics (DDSM)', utils.compute_metrics(probs, labels.numpy()))
