@@ -375,14 +375,14 @@ def train_HAM10000():
     model = models.JointWithLinearHead(abl_model, extractor, out_channels=num_classes)
 
     # Train
-    for seed in [9845, 988, 1701, 5318]:#, 54321]:
+    for seed in [54321, 9845, 988, 1701, 5318]:
         for learning_rate, base_lr_factor in [(1e-4, 1), (1e-3, 1e-1), (1e-2, 1e-2)]:
             for mi_lambda in [0, 0.1, 0.33, 0.66, 1, 3.33, 6.66, 10]:
                 try:
                     train_joint_with_mi(copy.deepcopy(model), train_dset, val_dset,
                                         learning_rate=learning_rate,
                                         base_lr_factor=base_lr_factor,
-                                        mi_lambda=mi_lambda,
+                                        mi_lambda=mi_lambda, seed=seed,
                                         wandb_group='ham10000',
                                         wandb_extra_hyperparams={'base': 'resnet'})
                 except ValueError:  # ignore convergence error
@@ -516,7 +516,7 @@ def train_DDSM():
     model = models.JointWithLinearHead(abl_model, extractor, out_channels=num_classes)
 
     # Train
-    for seed in [9845, 988, 1701, 5318]:#, 54321]:
+    for seed in [54321, 9845, 988, 1701, 5318]:
         for learning_rate, base_lr_factor in [(1e-4, 1), (1e-3, 1e-1), (1e-2, 1e-2)]:
 
             for mi_lambda in [0, 0.1, 0.33, 0.66, 1, 3.33, 6.66, 10]:
@@ -524,7 +524,7 @@ def train_DDSM():
                     train_joint_with_mi(copy.deepcopy(model), train_dset, val_dset,
                                         learning_rate=learning_rate,
                                         base_lr_factor=base_lr_factor, mi_lambda=mi_lambda,
-                                        wandb_group='ddsm',
+                                        wandb_group='ddsm', seed=seed,
                                         wandb_extra_hyperparams={'base': 'resnet'})
                 except ValueError:  # ignore convergence error
                     pass
