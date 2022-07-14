@@ -367,45 +367,45 @@ def train_HAM10000():
     utils.tprint('Setting up model...')
     abl_model = train_abl.get_HAM10000_AbL()
 
-    # Get feature extractor
-    extractor = models.ResNetBase(num_blocks=3)
-
-    # Create joint model
-    num_classes = train_dset.labels.max() + 1
-    model = models.JointWithLinearHead(abl_model, extractor, out_channels=num_classes)
-
-    # Train
-    for seed in [54321, 9845, 988, 1701, 5318]:
-        for learning_rate, base_lr_factor in [(1e-4, 1), (1e-3, 1e-1), (1e-2, 1e-2)]:
-            for mi_lambda in [0, 0.1, 0.33, 0.66, 1, 3.33, 6.66, 10]:
-                try:
-                    train_joint_with_mi(copy.deepcopy(model), train_dset, val_dset,
-                                        learning_rate=learning_rate,
-                                        base_lr_factor=base_lr_factor,
-                                        mi_lambda=mi_lambda, seed=seed,
-                                        wandb_group='ham10000',
-                                        wandb_extra_hyperparams={'base': 'resnet'})
-                except ValueError:  # ignore convergence error
-                    pass
-
     # # Get feature extractor
-    # extractor = models.ConvNetBase()
+    # extractor = models.ResNetBase(num_blocks=3)
 
     # # Create joint model
     # num_classes = train_dset.labels.max() + 1
     # model = models.JointWithLinearHead(abl_model, extractor, out_channels=num_classes)
 
     # # Train
-    # for learning_rate in [1e-4, 1e-3, 1e-2]:
-    #         for mi_lambda in [0, 1e-1, 1e0, 1e1]:
+    # for seed in [54321, 9845, 988, 1701, 5318]:
+    #     for learning_rate, base_lr_factor in [(1e-4, 1), (1e-3, 1e-1), (1e-2, 1e-2)]:
+    #         for mi_lambda in [0, 0.1, 0.33, 0.66, 1, 3.33, 6.66, 10]:
     #             try:
     #                 train_joint_with_mi(copy.deepcopy(model), train_dset, val_dset,
     #                                     learning_rate=learning_rate,
-    #                                     mi_lambda=mi_lambda,
+    #                                     base_lr_factor=base_lr_factor,
+    #                                     mi_lambda=mi_lambda, seed=seed,
     #                                     wandb_group='ham10000',
-    #                                     wandb_extra_hyperparams={'base': 'convnet'})
+    #                                     wandb_extra_hyperparams={'base': 'resnet'})
     #             except ValueError:  # ignore convergence error
     #                 pass
+
+    # Get feature extractor
+    extractor = models.ConvNetBase()
+
+    # Create joint model
+    num_classes = train_dset.labels.max() + 1
+    model = models.JointWithLinearHead(abl_model, extractor, out_channels=num_classes)
+
+    # Train
+    for learning_rate in [1e-4, 1e-3, 1e-2]:
+        for mi_lambda in [0, 0.1, 0.33, 0.66, 1, 3.33, 6.66, 10]:
+            try:
+                train_joint_with_mi(copy.deepcopy(model), train_dset, val_dset,
+                                    learning_rate=learning_rate,
+                                    mi_lambda=mi_lambda,
+                                    wandb_group='ham10000',
+                                    wandb_extra_hyperparams={'base': 'convnet'})
+            except ValueError:  # ignore convergence error
+                pass
 
 
 
@@ -518,7 +518,6 @@ def train_DDSM():
     # Train
     for seed in [54321, 9845, 988, 1701, 5318]:
         for learning_rate, base_lr_factor in [(1e-4, 1), (1e-3, 1e-1), (1e-2, 1e-2)]:
-
             for mi_lambda in [0, 0.1, 0.33, 0.66, 1, 3.33, 6.66, 10]:
                 try:
                     train_joint_with_mi(copy.deepcopy(model), train_dset, val_dset,
