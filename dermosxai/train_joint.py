@@ -447,6 +447,12 @@ def evaluate_HAM10000(wandb_path):
     Arguments:
         wandb_path (str): Name of the run as recorded by wandb usually something like 
             "username/project_name/run_id".
+            
+    Returns:
+        metrics (tuple): Six metrics as returned by utils.compute_metrics 
+            (accuracy, kappa, mcc, f1, auc, ap).
+        mi_estimates (tuple): MI estimates as returned by the MI estimator
+            (dv, dv_loss, jsd, infonce).
     """
     # Get data
     train_dset = datasets.HAM10000('train')
@@ -485,10 +491,15 @@ def evaluate_HAM10000(wandb_path):
 
     # Compute metrics
     probs = F.softmax(logits, dim=-1).numpy()
-    print('Metrics (HAM10000)', utils.compute_metrics(probs, labels.numpy()))
+    metrics = utils.compute_metrics(probs, labels.numpy())
+    print('Metrics (HAM10000)', metrics)
 
     # Compute MI
-    print('MI estimates (HAM10000);', mi_estimator(human_features, convnet_features))
+    with torch.no_grad():
+        mi_estimates = mi_estimator(human_features, convnet_features)
+    print('MI estimates (HAM10000);', mi_estimates)
+
+    return metrics, mi_estimates
 
 
 
@@ -587,6 +598,12 @@ def evaluate_DDSM(wandb_path):
     Arguments:
         wandb_path (str): Name of the run as recorded by wandb usually something like 
             "username/project_name/run_id".
+            
+    Returns:
+        metrics (tuple): Six metrics as returned by utils.compute_metrics 
+            (accuracy, kappa, mcc, f1, auc, ap).
+        mi_estimates (tuple): MI estimates as returned by the MI estimator
+            (dv, dv_loss, jsd, infonce).
     """
     # Get data
     train_dset = datasets.DDSM('train')
@@ -625,7 +642,12 @@ def evaluate_DDSM(wandb_path):
 
     # Compute metrics
     probs = F.softmax(logits, dim=-1).numpy()
-    print('Metrics (DDSM)', utils.compute_metrics(probs, labels.numpy()))
+    metrics = utils.compute_metrics(probs, labels.numpy())
+    print('Metrics (DDSM)', metrics)
 
     # Compute MI
-    print('MI estimates (DDSM);', mi_estimator(human_features, convnet_features))
+    with torch.no_grad():
+        mi_estimates = mi_estimator(human_features, convnet_features)
+    print('MI estimates (DDSM);', mi_estimates)
+
+    return metrics, mi_estimates
