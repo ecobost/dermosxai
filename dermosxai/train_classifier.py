@@ -112,7 +112,7 @@ def train_linear_on_resnet(train_dset, val_dset, save_dir):
     """ Train linear models on top of ResNet features.
     
     Images are send throught the resnet and normalized. Trains models across 4 resnet 
-    depths/blocksand a number of regularization strengths, evaluates them on training and
+    depths/blocks and a number of regularization strengths, evaluates them on training and
     validation set and saves the results in an h5 file.
     
     Arguments:
@@ -233,7 +233,7 @@ def train_linear_on_joint(train_dset, val_dset, abl_model, save_dir):
     """ Train a linear model on top of resnet_features AND predicted human attributes.
         
     Concatenates resnet features (after normalization) with the predicted human attribute
-    probabilities. Trains models across different resnet depths/blocka and a number of 
+    probabilities. Trains models across different resnet depths/blocks and a number of 
     regularization strengths, evaluates them on training and validation set and saves the
     results in an h5 file.
     
